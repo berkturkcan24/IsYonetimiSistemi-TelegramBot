@@ -296,22 +296,22 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Genel Performans", "rapor_performans")
+                InlineKeyboardButton.WithCallbackData("Genel Performans", "rapor_performans")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Personel Raporu", "rapor_personel_zaman_sec")
+                InlineKeyboardButton.WithCallbackData("Personel Raporu", "rapor_personel_zaman_sec")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Ana Menu", "main_menu")
+                InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
 
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "?? RAPORLAR\n\nDetaylý raporlarý görüntüleyebilirsiniz:",
+            "RAPORLAR\n\nDetayli raporlari görüntüleyebilirsiniz:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -323,27 +323,27 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Son 1 Gün", "personel_rapor_gun_1_")
+                InlineKeyboardButton.WithCallbackData("Son 1 Gün", "personel_rapor_gun_1_")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Son 1 Hafta", "personel_rapor_gun_7_")
+                InlineKeyboardButton.WithCallbackData("Son 1 Hafta", "personel_rapor_gun_7_")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Son 1 Ay", "personel_rapor_gun_30_")
+                InlineKeyboardButton.WithCallbackData("Son 1 Ay", "personel_rapor_gun_30_")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Raporlar", "menu_raporlar"),
-                InlineKeyboardButton.WithCallbackData("?? Ana Menu", "main_menu")
+                InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
 
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "?? PERSONEL RAPORU\n\nZaman aralýðý seçin:",
+            "PERSONEL RAPORU\n\nZaman araligi seçin:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -355,24 +355,24 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("?? Ana Menu", "main_menu")
+                InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
 
-        var helpText = "?? YARDIM\n\n" +
-                      "?? Bu bot sadece bilgi görüntüleme amaçlýdýr.\n\n" +
-                      "? YAPILABILENLER:\n" +
-                      " ?? Personel listesi görüntüleme\n" +
-                      " ?? Mali durum kontrolü\n" +
-                      " ?? Muhasebe kayýtlarý inceleme\n" +
-                      " ?? Personel iþlem geçmiþi\n" +
-                      " ?? Performans raporlarý\n\n" +
-                      "? YAPILAM AYANLAR:\n" +
-                      " ? Ýþlem ekleme\n" +
-                      " ?? Gelir/Gider ekleme\n" +
-                      " ?? Kayýt düzenleme\n" +
-                      " ??? Kayýt silme\n\n" +
-                      "?? Bu iþlemler için masaüstü uygulamayý kullanýn.";
+        var helpText = "YARDIM\n\n" +
+                      "Bu bot sadece bilgi görüntüleme amaçlidir.\n\n" +
+                      "YAPILABILENLER:\n" +
+                      " Personel listesi görüntüleme\n" +
+                      " Mali durum kontrolü\n" +
+                      " Muhasebe kayitlari inceleme\n" +
+                      " Personel islem geçmisi\n" +
+                      " Performans raporlari\n\n" +
+                      "YAPILAM AYANLAR:\n" +
+                      " Islem ekleme\n" +
+                      " Gelir/Gider ekleme\n" +
+                      " Kayit düzenleme\n" +
+                      " Kayit silme\n\n" +
+                      "Bu islemler için masaüstü uygulamayi kullanin.";
 
         await botClient.EditMessageTextAsync(
             chatId,
@@ -385,10 +385,10 @@ public class BotUpdateHandler : IUpdateHandler
 
     private async Task SendUnauthorizedMessage(ITelegramBotClient botClient, long chatId, CancellationToken cancellationToken)
     {
-        var message = "?? <b>YETKÝSÝZ ERÝÞÝM</b>\n\n" +
-                     "? Bu botu kullanma yetkiniz bulunmamaktadýr.\n\n" +
+        var message = "?? <b>YETKISIZ ERISIM</b>\n\n" +
+                     "? Bu botu kullanma yetkiniz bulunmamaktadir.\n\n" +
                      $"?? Chat ID: <code>{chatId}</code>\n\n" +
-                     "?? Eriþim için sistem yöneticisi ile iletiþime geçiniz.";
+                     "?? Erisim için sistem yöneticisi ile iletisime geçiniz.";
 
         await botClient.SendTextMessageAsync(
             chatId,
