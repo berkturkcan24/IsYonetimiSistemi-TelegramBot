@@ -16,4 +16,4 @@ cmds = [
 ]
 
 [start]
-cmd = "/app/.dotnet/dotnet out/IsYonetimiSistemi.TelegramBot.dll"
+cmd = "PATH=/app/.dotnet:$PATH dotnet out/IsYonetimiSistemi.TelegramBot.dll"
