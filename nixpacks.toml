@@ -12,8 +12,8 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "/app/.dotnet/dotnet publish IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj -c Release -o out --no-restore"
+  "/app/.dotnet/dotnet publish IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj -c Release -o out --no-restore --self-contained true -r linux-x64"
 ]
 
 [start]
-cmd = "PATH=/app/.dotnet:$PATH dotnet out/IsYonetimiSistemi.TelegramBot.dll"
+cmd = "./out/IsYonetimiSistemi.TelegramBot"
