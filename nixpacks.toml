@@ -6,8 +6,8 @@ cmds = [
   "curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh",
   "chmod +x dotnet-install.sh",
   "./dotnet-install.sh --channel 9.0 --install-dir /app/.dotnet",
-  "/app/.dotnet/dotnet restore IsYonetimiSistemi.Shared/IsYonetimiSistemi.Shared.csproj",
-  "/app/.dotnet/dotnet restore IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj"
+  "/app/.dotnet/dotnet restore IsYonetimiSistemi.Shared/IsYonetimiSistemi.Shared.csproj -r linux-x64",
+  "/app/.dotnet/dotnet restore IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj -r linux-x64"
 ]
 
 [phases.build]
