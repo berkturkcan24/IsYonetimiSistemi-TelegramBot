@@ -1,12 +1,10 @@
 [phases.setup]
-nixPkgs = ["wget", "ca-certificates"]
 
 [phases.install]
 cmds = [
-  "wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh",
+  "curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh",
   "chmod +x dotnet-install.sh",
   "./dotnet-install.sh --channel 9.0 --install-dir /app/.dotnet",
-  "export PATH=$PATH:/app/.dotnet",
   "/app/.dotnet/dotnet restore IsYonetimiSistemi.Shared/IsYonetimiSistemi.Shared.csproj",
   "/app/.dotnet/dotnet restore IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj"
 ]
