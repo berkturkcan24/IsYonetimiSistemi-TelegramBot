@@ -1,5 +1,5 @@
 [phases.setup]
-aptPkgs = ["libicu-dev", "libicu72"]
+aptPkgs = ["libicu-dev"]
 
 [phases.install]
 cmds = [
