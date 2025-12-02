@@ -22,11 +22,11 @@ public class AuthorizationService
     {
         var chatIdsString = _configuration["TelegramBot:AuthorizedChatIds"];
         
-        _logger.LogWarning($"?? CONFIG OKUNAN DEGER: '{chatIdsString}'");
+        _logger.LogWarning($"CONFIG OKUNAN DEGER: '{chatIdsString}'");
         
         if (string.IsNullOrWhiteSpace(chatIdsString))
         {
-            _logger.LogError("??? YETKÝLÝ CHAT ID LÝSTESÝ BOÞ - HÝÇBÝR KULLANICI ERÝÞEMEZ! ???");
+            _logger.LogError("YETKILI CHAT ID LISTESI BOS - HICBIR KULLANICI ERISEMEZ!");
             return;
         }
 
@@ -37,16 +37,16 @@ public class AuthorizationService
             if (long.TryParse(chatId.Trim(), out var id))
             {
                 _authorizedChatIds.Add(id);
-                _logger.LogWarning($"? Yetkili chat ID eklendi: {id}");
+                _logger.LogWarning($"Yetkili chat ID eklendi: {id}");
             }
             else
             {
-                _logger.LogError($"? Geçersiz chat ID formatý: {chatId}");
+                _logger.LogError($"GeÃ§ersiz chat ID formati: {chatId}");
             }
         }
 
-        _logger.LogWarning($"?? TOPLAM YETKÝLÝ KULLANICI: {_authorizedChatIds.Count}");
-        _logger.LogWarning($"?? YETKÝLÝ LISTESI: [{string.Join(", ", _authorizedChatIds)}]");
+        _logger.LogWarning($"TOPLAM YETKILI KULLANICI: {_authorizedChatIds.Count}");
+        _logger.LogWarning($"YETKILI LISTESI: [{string.Join(", ", _authorizedChatIds)}]");
     }
 
     public bool IsAuthorized(long chatId)
@@ -55,12 +55,12 @@ public class AuthorizationService
         
         if (isAuthorized)
         {
-            _logger.LogWarning($"? YETKÝLÝ ERÝÞÝM - Chat ID: {chatId}");
+            _logger.LogWarning($"YETKILI ERISIM - Chat ID: {chatId}");
         }
         else
         {
-            _logger.LogError($"??? YETKÝSÝZ ERÝÞÝM ENGELLENDÝ - Chat ID: {chatId} ???");
-            _logger.LogError($"? Yetkili liste: [{string.Join(", ", _authorizedChatIds)}]");
+            _logger.LogError($"YETKISIZ ERISIM ENGELLENDI - Chat ID: {chatId} ???");
+            _logger.LogError($"Yetkili liste: [{string.Join(", ", _authorizedChatIds)}]");
         }
 
         return isAuthorized;
