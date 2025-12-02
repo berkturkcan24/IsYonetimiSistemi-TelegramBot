@@ -1,0 +1,15 @@
+[providers]
+dotnet = "IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj"
+
+[phases.setup]
+nixPkgs = ["dotnet-sdk_9"]
+
+[phases.build]
+cmds = [
+  "dotnet restore IsYonetimiSistemi.Shared/IsYonetimiSistemi.Shared.csproj",
+  "dotnet restore IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj",
+  "dotnet publish IsYonetimiSistemi.TelegramBot/IsYonetimiSistemi.TelegramBot.csproj -c Release -o out"
+]
+
+[start]
+cmd = "dotnet out/IsYonetimiSistemi.TelegramBot.dll"
