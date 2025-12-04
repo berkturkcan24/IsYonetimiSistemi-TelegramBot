@@ -322,7 +322,7 @@ public class RaporCommands
                    $"Komisyon Orani: %{personel.KomisyonOrani:F1}\n\n" +
                    $"{zamanText.ToUpper()} ISLEMLERI:\n\n" +
                    islemListesiText +
-                   (islemler.Count > 8 ? $"... ve {islemler.Count - 8} islem daha\n\n" : "\n") +
+                   (islemler.Count > 10 ? $"... ve {islemler.Count - 10} islem daha\n\n" : "\n") +
                    $"OZET:\n" +
                    $"Toplam Islem: {toplamIslemSayisi} adet\n" +
                    $"Toplam Tutar: {toplamTutar:N2} TL\n" +
@@ -359,4 +359,5 @@ public class RaporCommands
         return 34.50m;
     }
 }
+
 
