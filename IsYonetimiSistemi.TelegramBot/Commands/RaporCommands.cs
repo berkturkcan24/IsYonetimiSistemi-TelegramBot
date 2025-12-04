@@ -40,7 +40,7 @@ public class RaporCommands
         var text = "PERSONELLER\n\n";
         foreach (var p in personeller)
         {
-            text += $"👤 {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
+            text += $"• {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
         }
 
         await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
@@ -208,7 +208,7 @@ public class RaporCommands
         foreach (var p in performans)
         {
             var medal = sira == 1 ? "1." : sira == 2 ? "2." : sira == 3 ? "3." : $"{sira}.";
-            text += $"{medal} {p.Personel}\n   {p.Toplam:N2} TL ({p.Adet} islem)\n\n";
+            text += $"{medal} {p.PersonelAdi}\n   {p.Toplam:N2} TL ({p.Adet} islem)\n\n";
             sira++;
         }
 
@@ -359,5 +359,3 @@ public class RaporCommands
         return 34.50m;
     }
 }
-
-
