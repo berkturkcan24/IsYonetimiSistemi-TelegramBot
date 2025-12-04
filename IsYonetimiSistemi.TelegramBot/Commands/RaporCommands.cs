@@ -40,7 +40,7 @@ public class RaporCommands
         var text = "PERSONELLER\n\n";
         foreach (var p in personeller)
         {
-            text += $"• {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
+            text += $"ðŸ‘¤ {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
         }
 
         await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
@@ -108,7 +108,7 @@ public class RaporCommands
         var text = "MUHASEBE GELIRLERI (Son 1 Ay)\n\n";
         foreach (var g in gelirler.Take(10))
         {
-            text += $"• {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
+            text += $"â€¢ {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
         }
         text += $"Toplam: {toplam:N2} TL ({gelirler.Count} islem)";
 
@@ -140,7 +140,7 @@ public class RaporCommands
         var text = "MUHASEBE GIDERLERI (Son 1 Ay)\n\n";
         foreach (var g in giderler.Take(10))
         {
-            text += $"• {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
+            text += $"â€¢ {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
         }
         text += $"Toplam: {toplam:N2} TL ({giderler.Count} islem)";
 
@@ -294,7 +294,7 @@ public class RaporCommands
             }
             var komisyon = islem.Tutar * komisyonOrani / 100;
 
-            islemListesiText += $"• {islem.IslemTarihi:dd.MM} - {islem.Aciklama}\n  {islem.Tutar:N2} TL (Kom: {komisyon:N2} TL)\n\n";
+            islemListesiText += $"â€¢ {islem.IslemTarihi:dd.MM} - {islem.Aciklama}\n  {islem.Tutar:N2} TL (Kom: {komisyon:N2} TL)\n\n";
         }
 
         // Toplam hesaplamalar - DOGRU YONTEM
@@ -359,3 +359,4 @@ public class RaporCommands
         return 34.50m;
     }
 }
+
