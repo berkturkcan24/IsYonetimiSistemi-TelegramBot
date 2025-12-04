@@ -185,8 +185,8 @@ public class RaporCommands
         var buAy = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
         var performans = await _context.Islemler
             .Where(i => i.IslemTarihi >= buAy && i.PersonelId != null)
-            .GroupBy(i => i.PersonelId)
-            .Select(g => new { Personel = g.Key, Toplam = g.Sum(i => i.Tutar), Adet = g.Count() })
+            .GroupBy(i => new { i.PersonelId, i.PersonelAdi })
+            .Select(g => new { PersonelAdi = g.Key.PersonelAdi, Toplam = g.Sum(i => i.Tutar), Adet = g.Count() })
             .OrderByDescending(x => x.Toplam)
             .Take(10)
             .ToListAsync(cancellationToken);
@@ -359,4 +359,5 @@ public class RaporCommands
         return 34.50m;
     }
 }
+
 
