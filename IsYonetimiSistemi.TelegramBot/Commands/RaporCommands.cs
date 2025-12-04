@@ -40,7 +40,7 @@ public class RaporCommands
         var text = "PERSONELLER\n\n";
         foreach (var p in personeller)
         {
-            text += $"• {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
+            text += $"👤 {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
         }
 
         await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
@@ -359,3 +359,4 @@ public class RaporCommands
         return 34.50m;
     }
 }
+
