@@ -178,7 +178,7 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Muhasebe", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("Gelir-Gider", "menu_muhasebe"),
                 InlineKeyboardButton.WithCallbackData("Personel Islemler", "menu_personel_islemler")
             },
             new[]
@@ -208,7 +208,7 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Muhasebe", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("Gelir-Gider", "menu_muhasebe"),
                 InlineKeyboardButton.WithCallbackData("Personel Islemler", "menu_personel_islemler")
             },
             new[]
