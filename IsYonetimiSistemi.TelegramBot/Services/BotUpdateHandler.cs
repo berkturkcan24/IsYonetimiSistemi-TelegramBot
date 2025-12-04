@@ -174,12 +174,12 @@ public class BotUpdateHandler : IUpdateHandler
             new[]
             {
                 InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
             },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
