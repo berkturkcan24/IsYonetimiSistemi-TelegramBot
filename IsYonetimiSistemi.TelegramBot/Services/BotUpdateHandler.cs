@@ -234,11 +234,11 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Gelirler Listesi", "muhasebe_gelir")
+                InlineKeyboardButton.WithCallbackData("📖 Gelirler Listesi", "muhasebe_gelir")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Giderler Listesi", "muhasebe_gider")
+                InlineKeyboardButton.WithCallbackData("📖 Giderler Listesi", "muhasebe_gider")
             },
             new[]
             {
@@ -251,8 +251,8 @@ public class BotUpdateHandler : IUpdateHandler
             messageId,
             "MUHASEBE\n\n" +
             "Muhasebe kayitlarini görüntüleyin:\n" +
-            " Gelirler listesi\n" +
-            " Giderler listesi\n\n" +
+            "📖 Gelirler listesi\n" +
+            "📖 Giderler listesi\n\n" +
             "Islem ekleme için masaüstü uygulamayi kullanýn.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
@@ -362,11 +362,11 @@ public class BotUpdateHandler : IUpdateHandler
         var helpText = "YARDIM\n\n" +
                       "Bu bot sadece bilgi görüntüleme amaçlidir.\n\n" +
                       "YAPILABILENLER:\n" +
-                      " Personel listesi görüntüleme\n" +
-                      " Mali durum kontrolü\n" +
-                      " Muhasebe kayitlari inceleme\n" +
-                      " Personel islem geçmisi\n" +
-                      " Performans raporlari\n\n" +
+                      "👤 Personel listesi görüntüleme\n" +
+                      "💰 Mali durum kontrolü\n" +
+                      "📖 Muhasebe kayitlari inceleme\n" +
+                      "👤 Personel islem geçmisi\n" +
+                      "📈 Performans raporlari\n\n" +
                       "YAPILAM AYANLAR:\n" +
                       " Islem ekleme\n" +
                       " Gelir/Gider ekleme\n" +
