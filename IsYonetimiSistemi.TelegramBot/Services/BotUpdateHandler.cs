@@ -183,8 +183,8 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar"),
-                InlineKeyboardButton.WithCallbackData("Yardim", "yardim")
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("? Yardim", "yardim")
             }
         });
 
@@ -203,18 +203,18 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
+                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar"),
-                InlineKeyboardButton.WithCallbackData("Yardim", "yardim")
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("? Yardim", "yardim")
             }
         });
 
@@ -234,11 +234,11 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📖 Gelirler Listesi", "muhasebe_gelir")
+                InlineKeyboardButton.WithCallbackData("📥 Gelirler Listesi", "muhasebe_gelir")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📖 Giderler Listesi", "muhasebe_gider")
+                InlineKeyboardButton.WithCallbackData("📤 Giderler Listesi", "muhasebe_gider")
             },
             new[]
             {
@@ -251,9 +251,9 @@ public class BotUpdateHandler : IUpdateHandler
             messageId,
             "MUHASEBE\n\n" +
             "Muhasebe kayitlarini görüntüleyin:\n" +
-            "📖 Gelirler listesi\n" +
-            "📖 Giderler listesi\n\n" +
-            "Islem ekleme için masaüstü uygulamayi kullanýn.",
+            "📥 Gelirler listesi\n" +
+            "📤 Giderler listesi\n\n" +
+            "Islem ekleme için masaüstü uygulamayi kullanin.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -284,7 +284,7 @@ public class BotUpdateHandler : IUpdateHandler
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "PERSONEL ISLEMLERI\n\nZaman araligi seçin:",
+            "🔍 PERSONEL ISLEMLERI\n\nZaman araligi seçin:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -311,7 +311,7 @@ public class BotUpdateHandler : IUpdateHandler
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "RAPORLAR\n\nDetayli raporlari görüntüleyebilirsiniz:",
+            "💸 HAKEDİŞ\n\nDetayli raporlari görüntüleyebilirsiniz:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -335,7 +335,7 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
                 InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
