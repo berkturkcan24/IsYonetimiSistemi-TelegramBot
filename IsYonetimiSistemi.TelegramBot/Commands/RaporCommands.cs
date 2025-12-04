@@ -1,336 +1,337 @@
-using Telegram.Bot;
-using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
-using IsYonetimiSistemi.Shared.Data;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-
-namespace IsYonetimiSistemi.TelegramBot.Commands;
-
-public class RaporCommands
-{
-    private readonly ILogger<RaporCommands> _logger;
-    private readonly AppDbContext _context;
-
-    public RaporCommands(ILogger<RaporCommands> logger, AppDbContext context)
-    {
-        _logger = logger;
-        _context = context;
-    }
-
-    public async Task ShowPersonellerList(ITelegramBotClient botClient, long chatId, int messageId, CancellationToken cancellationToken)
-    {
-        var personeller = await _context.Personeller
-            .Where(p => p.Aktif)
-            .OrderBy(p => p.AdSoyad)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        if (!personeller.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, "Personel bulunamadi.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var text = "PERSONELLER\n\n";
-        foreach (var p in personeller)
-        {
-            text += $"• {p.AdSoyad}\n  Komisyon: %{p.KomisyonOrani:F1}\n  Baslama: {p.IseBaslamaTarihi:dd.MM.yyyy}\n\n";
-        }
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowDurumRaporu(ITelegramBotClient botClient, long chatId, int messageId, CancellationToken cancellationToken)
-    {
-        var buAy = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-        
-        // Muhasebe kaynaðýndan bu ay
-        var muhasebeIslemler = await _context.Islemler
-            .Where(i => i.IslemTarihi >= buAy && i.Kaynak == "Muhasebe")
-            .ToListAsync(cancellationToken);
-        
-        var muhasebeGelir = muhasebeIslemler.Where(i => i.Tip == "Gelir").Sum(i => i.Tutar);
-        var muhasebeGider = muhasebeIslemler.Where(i => i.Tip == "Gider").Sum(i => i.Tutar);
-        var muhasebeNet = muhasebeGelir - muhasebeGider;
-
-        // Ýþlemler kaynaðýndan toplam
-        var islemlerKaynak = await _context.Islemler
-            .Where(i => i.Kaynak == "Islemler")
-            .ToListAsync(cancellationToken);
-        
-        var toplamIslemTL = islemlerKaynak.Sum(i => i.Tutar);
-        
-        // Döviz kuru
-        decimal dolarKuru = await GetDolarKuruAsync();
-        var toplamIslemUSD = toplamIslemTL / dolarKuru;
-
-        var text = $"MALI DURUM\n\n" +
-                   $"?? MUHASEBE (Bu Ay):\n" +
-                   $"Gelir: {muhasebeGelir:N2} TL\n" +
-                   $"Gider: {muhasebeGider:N2} TL\n" +
-                   $"Net: {muhasebeNet:N2} TL\n\n" +
-                   $"?? ISLEMLER (Toplam):\n" +
-                   $"Toplam Islem TL: {toplamIslemTL:N2} TL\n" +
-                   $"Toplam Islem USD: ${toplamIslemUSD:N2}";
-
-        var keyboard = new InlineKeyboardMarkup(new[] { new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") } });
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowMuhasebeGelirler(ITelegramBotClient botClient, long chatId, int messageId, CancellationToken cancellationToken)
-    {
-        var birAyOnce = DateTime.Now.AddMonths(-1);
-        var gelirler = await _context.Islemler
-            .Where(i => i.IslemTarihi >= birAyOnce && i.Tip == "Gelir" && i.Kaynak == "Muhasebe")
-            .OrderByDescending(i => i.IslemTarihi)
-            .Take(15)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Muhasebe Menu", "menu_muhasebe") },
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        if (!gelirler.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, "Muhasebeden gelir bulunamadi.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var toplam = gelirler.Sum(i => i.Tutar);
-        var text = "MUHASEBE GELIRLERI (Son 1 Ay)\n\n";
-        foreach (var g in gelirler.Take(10))
-        {
-            text += $"• {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
-        }
-        text += $"Toplam: {toplam:N2} TL ({gelirler.Count} islem)";
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowMuhasebeGiderler(ITelegramBotClient botClient, long chatId, int messageId, CancellationToken cancellationToken)
-    {
-        var birAyOnce = DateTime.Now.AddMonths(-1);
-        var giderler = await _context.Islemler
-            .Where(i => i.IslemTarihi >= birAyOnce && i.Tip == "Gider" && i.Kaynak == "Muhasebe")
-            .OrderByDescending(i => i.IslemTarihi)
-            .Take(15)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Muhasebe Menu", "menu_muhasebe") },
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        if (!giderler.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, "Muhasebeden gider bulunamadi.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var toplam = giderler.Sum(i => i.Tutar);
-        var text = "MUHASEBE GIDERLERI (Son 1 Ay)\n\n";
-        foreach (var g in giderler.Take(10))
-        {
-            text += $"• {g.Aciklama}\n  {g.Tutar:N2} TL - {g.IslemTarihi:dd.MM.yyyy}\n\n";
-        }
-        text += $"Toplam: {toplam:N2} TL ({giderler.Count} islem)";
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowPersonelIslemler(ITelegramBotClient botClient, long chatId, int messageId, int gunSayisi, CancellationToken cancellationToken)
-    {
-        var baslangic = DateTime.Now.AddDays(-gunSayisi);
-        var islemler = await _context.Islemler
-            .Where(i => i.IslemTarihi >= baslangic && i.PersonelId != null)
-            .OrderByDescending(i => i.IslemTarihi)
-            .Take(20)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Personel Islemler", "menu_personel_islemler") },
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        if (!islemler.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, $"Son {gunSayisi} gunde personel islemi bulunamadi.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var text = $"PERSONEL ISLEMLERI (Son {gunSayisi} Gun)\n\n";
-        foreach (var i in islemler.Take(15))
-        {
-            var tip = i.Tip == "Gelir" ? "+" : "-";
-            text += $"{tip} {i.PersonelAdi}\n  {i.Aciklama}\n  {i.Tutar:N2} TL - {i.IslemTarihi:dd.MM.yyyy}\n\n";
-        }
-        text += $"Toplam {islemler.Count} islem";
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowPerformansRaporu(ITelegramBotClient botClient, long chatId, int messageId, CancellationToken cancellationToken)
-    {
-        var buAy = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-        var performans = await _context.Islemler
-            .Where(i => i.IslemTarihi >= buAy && i.PersonelId != null)
-            .GroupBy(i => i.PersonelAdi)
-            .Select(g => new { Personel = g.Key, Toplam = g.Sum(i => i.Tutar), Adet = g.Count() })
-            .OrderByDescending(x => x.Toplam)
-            .Take(10)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar") },
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        if (!performans.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, "Bu ay performans verisi yok.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var text = "GENEL PERFORMANS (Bu Ay)\n\n";
-        int sira = 1;
-        foreach (var p in performans)
-        {
-            var medal = sira == 1 ? "1." : sira == 2 ? "2." : sira == 3 ? "3." : $"{sira}.";
-            text += $"{medal} {p.Personel}\n   {p.Toplam:N2} TL ({p.Adet} islem)\n\n";
-            sira++;
-        }
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowPersonelSecimMenu(ITelegramBotClient botClient, long chatId, int messageId, int gunSayisi, CancellationToken cancellationToken)
-    {
-        var personeller = await _context.Personeller
-            .Where(p => p.Aktif)
-            .OrderBy(p => p.AdSoyad)
-            .ToListAsync(cancellationToken);
-
-        if (!personeller.Any())
-        {
-            var emptyKeyboard = new InlineKeyboardMarkup(new[] { new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") } });
-            await botClient.EditMessageTextAsync(chatId, messageId, "Personel bulunamadi.", replyMarkup: emptyKeyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var zamanText = gunSayisi == 1 ? "Son 1 Gun" : gunSayisi == 7 ? "Son 1 Hafta" : "Son 1 Ay";
-        var buttons = new List<InlineKeyboardButton[]>();
-        foreach (var p in personeller)
-        {
-            buttons.Add(new[] { InlineKeyboardButton.WithCallbackData(p.AdSoyad, $"personel_detay_{p.Id}_{gunSayisi}") });
-        }
-        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("Zaman Sec", "rapor_personel_zaman_sec") });
-        buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("Raporlar", "menu_raporlar"), InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") });
-
-        var keyboard = new InlineKeyboardMarkup(buttons);
-        await botClient.EditMessageTextAsync(chatId, messageId, $"PERSONEL RAPORU ({zamanText})\n\nPersonel secin:", replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    public async Task ShowPersonelDetayRapor(ITelegramBotClient botClient, long chatId, int messageId, int personelId, int gunSayisi, CancellationToken cancellationToken)
-    {
-        var personel = await _context.Personeller.FindAsync(personelId);
-        if (personel == null)
-        {
-            var errorKeyboard = new InlineKeyboardMarkup(new[] { new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") } });
-            await botClient.EditMessageTextAsync(chatId, messageId, "Personel bulunamadi.", replyMarkup: errorKeyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        var baslangicTarihi = DateTime.Now.AddDays(-gunSayisi);
-        var islemler = await _context.Islemler
-            .Where(i => i.PersonelId == personelId && i.IslemTarihi >= baslangicTarihi && i.Kaynak == "Islemler")
-            .OrderByDescending(i => i.IslemTarihi)
-            .ToListAsync(cancellationToken);
-
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("Personel Sec", $"personel_rapor_gun_{gunSayisi}_") },
-            new[] { InlineKeyboardButton.WithCallbackData("Zaman Sec", "rapor_personel_zaman_sec") },
-            new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
-        });
-
-        var zamanText = gunSayisi == 1 ? "Son 1 Gun" : gunSayisi == 7 ? "Son 1 Hafta" : "Son 1 Ay";
-
-        if (!islemler.Any())
-        {
-            await botClient.EditMessageTextAsync(chatId, messageId, $"{personel.AdSoyad}\n\n{zamanText}'de islem yok.", replyMarkup: keyboard, cancellationToken: cancellationToken);
-            return;
-        }
-
-        // Döviz kuru bilgisi
-        decimal dolarKuru = await GetDolarKuruAsync();
-
-        // Ýþlem listesi oluþtur (en fazla 8 iþlem)
-        var islemListesiText = "";
-        foreach (var islem in islemler.Take(8))
-        {
-            var komisyon = islem.Tutar * personel.KomisyonOrani / 100;
-            islemListesiText += $"• {islem.IslemTarihi:dd.MM} - {islem.Aciklama}\n  {islem.Tutar:N2} TL (Kom: {komisyon:N2} TL)\n\n";
-        }
-
-        // Toplam hesaplamalar
-        var toplamIslemSayisi = islemler.Count;
-        var toplamTutar = islemler.Sum(i => i.Tutar);
-        var toplamTutarDolar = toplamTutar / dolarKuru;
-        var toplamKomisyon = islemler.Sum(i => i.Tutar * personel.KomisyonOrani / 100);
-        var toplamKomisyonDolar = toplamKomisyon / dolarKuru;
-
-        var text = $"PERSONEL RAPORU\n\n" +
-                   $"? {personel.AdSoyad}\n" +
-                   $"Komisyon Orani: %{personel.KomisyonOrani:F1}\n\n" +
-                   $"{zamanText.ToUpper()} ISLEMLERI:\n\n" +
-                   islemListesiText +
-                   (islemler.Count > 8 ? $"... ve {islemler.Count - 8} islem daha\n\n" : "\n") +
-                   $"OZET:\n" +
-                   $"? Toplam Islem: {toplamIslemSayisi} adet\n" +
-                   $"? Toplam Tutar: {toplamTutar:N2} TL\n" +
-                   $"  (${toplamTutarDolar:N2})\n" +
-                   $"? Toplam Komisyon: {toplamKomisyon:N2} TL\n" +
-                   $"  (${toplamKomisyonDolar:N2})";
-
-        await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
-    }
-
-    private async Task<decimal> GetDolarKuruAsync()
-    {
-        try
-        {
-            using var httpClient = new HttpClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
-            var response = await httpClient.GetStringAsync("https://api.exchangerate-api.com/v4/latest/USD");
-            var jsonDoc = System.Text.Json.JsonDocument.Parse(response);
-            
-            if (jsonDoc.RootElement.TryGetProperty("rates", out var rates))
-            {
-                if (rates.TryGetProperty("TRY", out var tryRate))
-                {
-                    return tryRate.GetDecimal();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Doviz kuru alinamadi, varsayilan kur kullaniliyor");
-        }
-        
-        // Varsayýlan kur
-        return 34.50m;
-    }
-
-}
-
+GiGuGiGsGiGiGiGnGiGgGiG GiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiG.GiGBGiGoGiGtGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiG.GiGBGiGoGiGtGiG.GiGTGiGyGiGpGiGeGiGsGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiG.GiGBGiGoGiGtGiG.GiGTGiGyGiGpGiGeGiGsGiG.GiGEGiGnGiGuGiGmGiGsGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiG.GiGBGiGoGiGtGiG.GiGTGiGyGiGpGiGeGiGsGiG.GiGRGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiGsGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGiGiGsGiGYGiGoGiGnGiGeGiGtGiGiGiGmGiGiGiGSGiGiGiGsGiGtGiGeGiGmGiGiGiG.GiGSGiGhGiGaGiGrGiGeGiGdGiG.GiGDGiGaGiGtGiGaGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGMGiGiGiGcGiGrGiGoGiGsGiGoGiGfGiGtGiG.GiGEGiGnGiGtGiGiGiGtGiGyGiGFGiGrGiGaGiGmGiGeGiGwGiGoGiGrGiGkGiGCGiGoGiGrGiGeGiG;GiG
+GiGuGiGsGiGiGiGnGiGgGiG GiGMGiGiGiGcGiGrGiGoGiGsGiGoGiGfGiGtGiG.GiGEGiGxGiGtGiGeGiGnGiGsGiGiGiGoGiGnGiGsGiG.GiGLGiGoGiGgGiGgGiGiGiGnGiGgGiG;GiG
+GiG
+GiGnGiGaGiGmGiGeGiGsGiGpGiGaGiGcGiGeGiG GiGiGiGsGiGYGiGoGiGnGiGeGiGtGiGiGiGmGiGiGiGSGiGiGiGsGiGtGiGeGiGmGiGiGiG.GiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiG.GiGCGiGoGiGmGiGmGiGaGiGnGiGdGiGsGiG;GiG
+GiG
+GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGcGiGlGiGaGiGsGiGsGiG GiGRGiGaGiGpGiGoGiGrGiGCGiGoGiGmGiGmGiGaGiGnGiGdGiGsGiG
+GiG{GiG
+GiG GiG GiG GiG GiGpGiGrGiGiGiGvGiGaGiGtGiGeGiG GiGrGiGeGiGaGiGdGiGoGiGnGiGlGiGyGiG GiGiGiGLGiGoGiGgGiGgGiGeGiGrGiG<GiGRGiGaGiGpGiGoGiGrGiGCGiGoGiGmGiGmGiGaGiGnGiGdGiGsGiG>GiG GiG_GiGlGiGoGiGgGiGgGiGeGiGrGiG;GiG
+GiG GiG GiG GiG GiGpGiGrGiGiGiGvGiGaGiGtGiGeGiG GiGrGiGeGiGaGiGdGiGoGiGnGiGlGiGyGiG GiGAGiGpGiGpGiGDGiGbGiGCGiGoGiGnGiGtGiGeGiGxGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG;GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGRGiGaGiGpGiGoGiGrGiGCGiGoGiGmGiGmGiGaGiGnGiGdGiGsGiG(GiGiGiGLGiGoGiGgGiGgGiGeGiGrGiG<GiGRGiGaGiGpGiGoGiGrGiGCGiGoGiGmGiGmGiGaGiGnGiGdGiGsGiG>GiG GiGlGiGoGiGgGiGgGiGeGiGrGiG,GiG GiGAGiGpGiGpGiGDGiGbGiGCGiGoGiGnGiGtGiGeGiGxGiGtGiG GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG_GiGlGiGoGiGgGiGgGiGeGiGrGiG GiG=GiG GiGlGiGoGiGgGiGgGiGeGiGrGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG GiG=GiG GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiGLGiGiGiGsGiGtGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGpGiG GiG=GiG>GiG GiGpGiG.GiGAGiGkGiGtGiGiGiGfGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiG(GiGpGiG GiG=GiG>GiG GiGpGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG"GiGPGiGEGiGRGiGSGiGOGiGNGiGEGiGLGiGLGiGEGiGRGiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGpGiG GiGiGiGnGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG•GiG GiG{GiGpGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG}GiG\GiGnGiG GiG GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG:GiG GiG%GiG{GiGpGiG.GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGOGiGrGiGaGiGnGiGiGiG:GiGFGiG1GiG}GiG\GiGnGiG GiG GiGBGiGaGiGsGiGlGiGaGiGmGiGaGiG:GiG GiG{GiGpGiG.GiGiGiGsGiGeGiGBGiGaGiGsGiGlGiGaGiGmGiGaGiGTGiGaGiGrGiGiGiGhGiGiGiG:GiGdGiGdGiG.GiGMGiGMGiG.GiGyGiGyGiGyGiGyGiG}GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGDGiGuGiGrGiGuGiGmGiGRGiGaGiGpGiGoGiGrGiGuGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGuGiGAGiGyGiG GiG=GiG GiGnGiGeGiGwGiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG(GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGYGiGeGiGaGiGrGiG,GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGMGiGoGiGnGiGtGiGhGiG,GiG GiG1GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG GiGkGiGaGiGyGiGnGiGaGiGgGiGiGiGnGiGdGiGaGiGnGiG GiGbGiGuGiG GiGaGiGyGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGuGiGAGiGyGiG GiG&GiG&GiG GiGiGiG.GiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG=GiG GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG"GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGeGiGlGiGiGiGrGiG GiG=GiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGiGiGpGiG GiG=GiG=GiG GiG"GiGGGiGeGiGlGiGiGiGrGiG"GiG)GiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGiGiGdGiGeGiGrGiG GiG=GiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGiGiGpGiG GiG=GiG=GiG GiG"GiGGGiGiGiGdGiGeGiGrGiG"GiG)GiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGNGiGeGiGtGiG GiG=GiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGeGiGlGiGiGiGrGiG GiG-GiG GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGiGiGdGiGeGiGrGiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGÝGiGSGiGlGiGeGiGmGiGlGiGeGiGrGiG GiGkGiGaGiGyGiGnGiGaGiGgGiGiGiGnGiGdGiGaGiGnGiG GiGtGiGoGiGpGiGlGiGaGiGmGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG=GiG GiG"GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG"GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGTGiGLGiG GiG=GiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiGKGiGaGiGyGiGnGiGaGiGkGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGDGiGOGiGvGiGiGiGzGiG GiGkGiGuGiGrGiGuGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGdGiGeGiGcGiGiGiGmGiGaGiGlGiG GiGdGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiGGGiGeGiGtGiGDGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiGAGiGsGiGyGiGnGiGcGiG(GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGUGiGSGiGDGiG GiG=GiG GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGTGiGLGiG GiG/GiG GiGdGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG$GiG"GiGMGiGAGiGLGiGiGiG GiGDGiGUGiGRGiGUGiGMGiG\GiGnGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGMGiGUGiGHGiGAGiGSGiGEGiGBGiGEGiG GiG(GiGBGiGuGiG GiGAGiGyGiG)GiG:GiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGGGiGeGiGlGiGiGiGrGiG:GiG GiG{GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGeGiGlGiGiGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGGGiGiGiGdGiGeGiGrGiG:GiG GiG{GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGiGiGdGiGeGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGNGiGeGiGtGiG:GiG GiG{GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGNGiGeGiGtGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGiGiGSGiGLGiGEGiGMGiGLGiGEGiGRGiG GiG(GiGTGiGoGiGpGiGlGiGaGiGmGiG)GiG:GiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGiGiGsGiGlGiGeGiGmGiG GiGTGiGLGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGTGiGLGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGiGiGsGiGlGiGeGiGmGiG GiGUGiGSGiGDGiG:GiG GiG$GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGUGiGSGiGDGiG:GiGNGiG2GiG}GiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG GiG}GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGiGiGrGiGAGiGyGiGOGiGnGiGcGiGeGiG GiG=GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGAGiGdGiGdGiGMGiGoGiGnGiGtGiGhGiGsGiG(GiG-GiG1GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGgGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGiGiGrGiGAGiGyGiGOGiGnGiGcGiGeGiG GiG&GiG&GiG GiGiGiG.GiGTGiGiGiGpGiG GiG=GiG=GiG GiG"GiGGGiGeGiGlGiGiGiGrGiG"GiG GiG&GiG&GiG GiGiGiG.GiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG=GiG GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG"GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiGDGiGeGiGsGiGcGiGeGiGnGiGdGiGiGiGnGiGgGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG5GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGeGiGnGiGuGiG_GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGgGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGdGiGeGiGnGiG GiGgGiGeGiGlGiGiGiGrGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiG GiG=GiG GiGgGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG"GiGMGiGUGiGHGiGAGiGSGiGEGiGBGiGEGiG GiGGGiGEGiGLGiGiGiGRGiGLGiGEGiGRGiGiGiG GiG(GiGSGiGoGiGnGiG GiG1GiG GiGAGiGyGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGgGiG GiGiGiGnGiG GiGgGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG0GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG•GiG GiG{GiGgGiG.GiGAGiGcGiGiGiGkGiGlGiGaGiGmGiGaGiG}GiG\GiGnGiG GiG GiG{GiGgGiG.GiGTGiGuGiGtGiGaGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG-GiG GiG{GiGgGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG:GiGdGiGdGiG.GiGMGiGMGiG.GiGyGiGyGiGyGiGyGiG}GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG(GiG{GiGgGiGeGiGlGiGiGiGrGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG}GiG GiGiGiGsGiGlGiGeGiGmGiG)GiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGGGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGiGiGrGiGAGiGyGiGOGiGnGiGcGiGeGiG GiG=GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGAGiGdGiGdGiGMGiGoGiGnGiGtGiGhGiGsGiG(GiG-GiG1GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGgGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGiGiGrGiGAGiGyGiGOGiGnGiGcGiGeGiG GiG&GiG&GiG GiGiGiG.GiGTGiGiGiGpGiG GiG=GiG=GiG GiG"GiGGGiGiGiGdGiGeGiGrGiG"GiG GiG&GiG&GiG GiGiGiG.GiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG=GiG GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG"GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiGDGiGeGiGsGiGcGiGeGiGnGiGdGiGiGiGnGiGgGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG5GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGeGiGnGiGuGiG_GiGmGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGgGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGMGiGuGiGhGiGaGiGsGiGeGiGbGiGeGiGdGiGeGiGnGiG GiGgGiGiGiGdGiGeGiGrGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiG GiG=GiG GiGgGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG"GiGMGiGUGiGHGiGAGiGSGiGEGiGBGiGEGiG GiGGGiGiGiGDGiGEGiGRGiGLGiGEGiGRGiGiGiG GiG(GiGSGiGoGiGnGiG GiG1GiG GiGAGiGyGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGgGiG GiGiGiGnGiG GiGgGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG0GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG•GiG GiG{GiGgGiG.GiGAGiGcGiGiGiGkGiGlGiGaGiGmGiGaGiG}GiG\GiGnGiG GiG GiG{GiGgGiG.GiGTGiGuGiGtGiGaGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG-GiG GiG{GiGgGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG:GiGdGiGdGiG.GiGMGiGMGiG.GiGyGiGyGiGyGiGyGiG}GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG(GiG{GiGgGiGiGiGdGiGeGiGrGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG}GiG GiGiGiGsGiGlGiGeGiGmGiG)GiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGaGiGsGiGlGiGaGiGnGiGgGiGiGiGcGiG GiG=GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGAGiGdGiGdGiGDGiGaGiGyGiGsGiG(GiG-GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGaGiGsGiGlGiGaGiGnGiGgGiGiGiGcGiG GiG&GiG&GiG GiGiGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG GiG!GiG=GiG GiGnGiGuGiGlGiGlGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiGDGiGeGiGsGiGcGiGeGiGnGiGdGiGiGiGnGiGgGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGaGiGkGiGeGiG(GiG2GiG0GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG"GiG,GiG GiG"GiGmGiGeGiGnGiGuGiG_GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG_GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG$GiG"GiGSGiGoGiGnGiG GiG{GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG}GiG GiGgGiGuGiGnGiGdGiGeGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGiGiGsGiGlGiGeGiGmGiGiGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG$GiG"GiGPGiGEGiGRGiGSGiGOGiGNGiGEGiGLGiG GiGiGiGSGiGLGiGEGiGMGiGLGiGEGiGRGiGiGiG GiG(GiGSGiGoGiGnGiG GiG{GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG}GiG GiGGGiGuGiGnGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGiGiG GiGiGiGnGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG5GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGiGiGpGiG GiG=GiG GiGiGiG.GiGTGiGiGiGpGiG GiG=GiG=GiG GiG"GiGGGiGeGiGlGiGiGiGrGiG"GiG GiG"GiG+GiG"GiG GiG:GiG GiG"GiG-GiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG{GiGtGiGiGiGpGiG}GiG GiG{GiGiGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGAGiGdGiGiGiG}GiG\GiGnGiG GiG GiG{GiGiGiG.GiGAGiGcGiGiGiGkGiGlGiGaGiGmGiGaGiG}GiG\GiGnGiG GiG GiG{GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG-GiG GiG{GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG:GiGdGiGdGiG.GiGMGiGMGiG.GiGyGiGyGiGyGiGyGiG}GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiG{GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG}GiG GiGiGiGsGiGlGiGeGiGmGiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGPGiGeGiGrGiGfGiGoGiGrGiGmGiGaGiGnGiGsGiGRGiGaGiGpGiGoGiGrGiGuGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGuGiGAGiGyGiG GiG=GiG GiGnGiGeGiGwGiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG(GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGYGiGeGiGaGiGrGiG,GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGMGiGoGiGnGiGtGiGhGiG,GiG GiG1GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGpGiGeGiGrGiGfGiGoGiGrGiGmGiGaGiGnGiGsGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGuGiGAGiGyGiG GiG&GiG&GiG GiGiGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG GiG!GiG=GiG GiGnGiGuGiGlGiGlGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGGGiGrGiGoGiGuGiGpGiGBGiGyGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGAGiGdGiGiGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGSGiGeGiGlGiGeGiGcGiGtGiG(GiGgGiG GiG=GiG>GiG GiGnGiGeGiGwGiG GiG{GiG GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiG=GiG GiGgGiG.GiGKGiGeGiGyGiG,GiG GiGTGiGoGiGpGiGlGiGaGiGmGiG GiG=GiG GiGgGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG,GiG GiGAGiGdGiGeGiGtGiG GiG=GiG GiGgGiG.GiGCGiGoGiGuGiGnGiGtGiG(GiG)GiG GiG}GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiGDGiGeGiGsGiGcGiGeGiGnGiGdGiGiGiGnGiGgGiG(GiGxGiG GiG=GiG>GiG GiGxGiG.GiGTGiGoGiGpGiGlGiGaGiGmGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGaGiGkGiGeGiG(GiG1GiG0GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGRGiGaGiGpGiGoGiGrGiGlGiGaGiGrGiG"GiG,GiG GiG"GiGmGiGeGiGnGiGuGiG_GiGrGiGaGiGpGiGoGiGrGiGlGiGaGiGrGiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGpGiGeGiGrGiGfGiGoGiGrGiGmGiGaGiGnGiGsGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGBGiGuGiG GiGaGiGyGiG GiGpGiGeGiGrGiGfGiGoGiGrGiGmGiGaGiGnGiGsGiG GiGvGiGeGiGrGiGiGiGsGiGiGiG GiGyGiGoGiGkGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG"GiGGGiGEGiGNGiGEGiGLGiG GiGPGiGEGiGRGiGFGiGOGiGRGiGMGiGAGiGNGiGSGiG GiG(GiGBGiGuGiG GiGAGiGyGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGnGiGtGiG GiGsGiGiGiGrGiGaGiG GiG=GiG GiG1GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGpGiG GiGiGiGnGiG GiGpGiGeGiGrGiGfGiGoGiGrGiGmGiGaGiGnGiGsGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGmGiGeGiGdGiGaGiGlGiG GiG=GiG GiGsGiGiGiGrGiGaGiG GiG=GiG=GiG GiG1GiG GiG"GiG1GiG.GiG"GiG GiG:GiG GiGsGiGiGiGrGiGaGiG GiG=GiG=GiG GiG2GiG GiG"GiG2GiG.GiG"GiG GiG:GiG GiGsGiGiGiGrGiGaGiG GiG=GiG=GiG GiG3GiG GiG"GiG3GiG.GiG"GiG GiG:GiG GiG$GiG"GiG{GiGsGiGiGiGrGiGaGiG}GiG.GiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG{GiGmGiGeGiGdGiGaGiGlGiG}GiG GiG{GiGpGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG}GiG\GiGnGiG GiG GiG GiG{GiGpGiG.GiGTGiGoGiGpGiGlGiGaGiGmGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG(GiG{GiGpGiG.GiGAGiGdGiGeGiGtGiG}GiG GiGiGiGsGiGlGiGeGiGmGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGsGiGiGiGrGiGaGiG+GiG+GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGSGiGeGiGcGiGiGiGmGiGMGiGeGiGnGiGuGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGpGiG GiG=GiG>GiG GiGpGiG.GiGAGiGkGiGtGiGiGiGfGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiG(GiGpGiG GiG=GiG>GiG GiGpGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGeGiGmGiGpGiGtGiGyGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG GiG}GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGeGiGmGiGpGiGtGiGyGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGzGiGaGiGmGiGaGiGnGiGTGiGeGiGxGiGtGiG GiG=GiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG GiG=GiG=GiG GiG1GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGGGiGuGiGnGiG"GiG GiG:GiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG GiG=GiG=GiG GiG7GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGHGiGaGiGfGiGtGiGaGiG"GiG GiG:GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGAGiGyGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGuGiGtGiGtGiGoGiGnGiGsGiG GiG=GiG GiGnGiGeGiGwGiG GiGLGiGiGiGsGiGtGiG<GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG[GiG]GiG>GiG(GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGpGiG GiGiGiGnGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGbGiGuGiGtGiGtGiGoGiGnGiGsGiG.GiGAGiGdGiGdGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiGpGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG,GiG GiG$GiG"GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG_GiGdGiGeGiGtGiGaGiGyGiG_GiG{GiGpGiG.GiGiGiGdGiG}GiG_GiG{GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG}GiG"GiG)GiG GiG}GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGbGiGuGiGtGiGtGiGoGiGnGiGsGiG.GiGAGiGdGiGdGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGZGiGaGiGmGiGaGiGnGiG GiGSGiGeGiGcGiG"GiG,GiG GiG"GiGrGiGaGiGpGiGoGiGrGiG_GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG_GiGzGiGaGiGmGiGaGiGnGiG_GiGsGiGeGiGcGiG"GiG)GiG GiG}GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGbGiGuGiGtGiGtGiGoGiGnGiGsGiG.GiGAGiGdGiGdGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGRGiGaGiGpGiGoGiGrGiGlGiGaGiGrGiG"GiG,GiG GiG"GiGmGiGeGiGnGiGuGiG_GiGrGiGaGiGpGiGoGiGrGiGlGiGaGiGrGiG"GiG)GiG,GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGbGiGuGiGtGiGtGiGoGiGnGiGsGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG$GiG"GiGPGiGEGiGRGiGSGiGOGiGNGiGEGiGLGiG GiGRGiGAGiGPGiGOGiGRGiGUGiG GiG(GiG{GiGzGiGaGiGmGiGaGiGnGiGTGiGeGiGxGiGtGiG}GiG)GiG\GiGnGiG\GiGnGiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGsGiGeGiGcGiGiGiGnGiG:GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGuGiGbGiGlGiGiGiGcGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG GiGSGiGhGiGoGiGwGiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGDGiGeGiGtGiGaGiGyGiGRGiGaGiGpGiGoGiGrGiG(GiGiGiGTGiGeGiGlGiGeGiGgGiGrGiGaGiGmGiGBGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG,GiG GiGlGiGoGiGnGiGgGiG GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG,GiG GiGiGiGnGiGtGiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG,GiG GiGCGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGlGiGeGiGrGiG.GiGFGiGiGiGnGiGdGiGAGiGsGiGyGiGnGiGcGiG(GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiG=GiG=GiG GiGnGiGuGiGlGiGlGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGeGiGrGiGrGiGoGiGrGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG GiG}GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG"GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGbGiGuGiGlGiGuGiGnGiGaGiGmGiGaGiGdGiGiGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGeGiGrGiGrGiGoGiGrGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGbGiGaGiGsGiGlGiGaGiGnGiGgGiGiGiGcGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG=GiG GiGDGiGaGiGtGiGeGiGTGiGiGiGmGiGeGiG.GiGNGiGoGiGwGiG.GiGAGiGdGiGdGiGDGiGaGiGyGiGsGiG(GiG-GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiG_GiGcGiGoGiGnGiGtGiGeGiGxGiGtGiG.GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGWGiGhGiGeGiGrGiGeGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG GiG=GiG=GiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiGiGiGdGiG GiG&GiG&GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG>GiG=GiG GiGbGiGaGiGsGiGlGiGaGiGnGiGgGiGiGiGcGiGTGiGaGiGrGiGiGiGhGiGiGiG GiG&GiG&GiG GiGiGiG.GiGKGiGaGiGyGiGnGiGaGiGkGiG GiG=GiG=GiG GiG"GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG"GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGOGiGrGiGdGiGeGiGrGiGBGiGyGiGDGiGeGiGsGiGcGiGeGiGnGiGdGiGiGiGnGiGgGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG.GiGTGiGoGiGLGiGiGiGsGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG GiG=GiG GiGnGiGeGiGwGiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGMGiGaGiGrGiGkGiGuGiGpGiG(GiGnGiGeGiGwGiG[GiG]GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGPGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG GiGSGiGeGiGcGiG"GiG,GiG GiG$GiG"GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG_GiGrGiGaGiGpGiGoGiGrGiG_GiGgGiGuGiGnGiG_GiG{GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG}GiG_GiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGZGiGaGiGmGiGaGiGnGiG GiGSGiGeGiGcGiG"GiG,GiG GiG"GiGrGiGaGiGpGiGoGiGrGiG_GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG_GiGzGiGaGiGmGiGaGiGnGiG_GiGsGiGeGiGcGiG"GiG)GiG GiG}GiG,GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGnGiGeGiGwGiG[GiG]GiG GiG{GiG GiGiGiGnGiGlGiGiGiGnGiGeGiGKGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiGBGiGuGiGtGiGtGiGoGiGnGiG.GiGWGiGiGiGtGiGhGiGCGiGaGiGlGiGlGiGbGiGaGiGcGiGkGiGDGiGaGiGtGiGaGiG(GiG"GiGAGiGnGiGaGiG GiGMGiGeGiGnGiGuGiG"GiG,GiG GiG"GiGmGiGaGiGiGiGnGiG_GiGmGiGeGiGnGiGuGiG"GiG)GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGzGiGaGiGmGiGaGiGnGiGTGiGeGiGxGiGtGiG GiG=GiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG GiG=GiG=GiG GiG1GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGGGiGuGiGnGiG"GiG GiG:GiG GiGgGiGuGiGnGiGSGiGaGiGyGiGiGiGsGiGiGiG GiG=GiG=GiG GiG7GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGHGiGaGiGfGiGtGiGaGiG"GiG GiG:GiG GiG"GiGSGiGoGiGnGiG GiG1GiG GiGAGiGyGiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiG!GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGAGiGnGiGyGiG(GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiG$GiG"GiG{GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG}GiG\GiGnGiG\GiGnGiG{GiGzGiGaGiGmGiGaGiGnGiGTGiGeGiGxGiGtGiG}GiG'GiGdGiGeGiG GiGiGiGsGiGlGiGeGiGmGiG GiGyGiGoGiGkGiG.GiG"GiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGDGiGOGiGvGiGiGiGzGiG GiGkGiGuGiGrGiGuGiG GiGbGiGiGiGlGiGgGiGiGiGsGiGiGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGdGiGeGiGcGiGiGiGmGiGaGiGlGiG GiGdGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiGGGiGeGiGtGiGDGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiGAGiGsGiGyGiGnGiGcGiG(GiG)GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGÝGiGSGiGlGiGeGiGmGiG GiGlGiGiGiGsGiGtGiGeGiGsGiGiGiG GiGoGiGlGiGuGiGSGiGtGiGuGiGrGiG GiG(GiGeGiGnGiG GiGfGiGaGiGzGiGlGiGaGiG GiG8GiG GiGiGiGSGiGlGiGeGiGmGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGiGiGsGiGlGiGeGiGmGiGLGiGiGiGsGiGtGiGeGiGsGiGiGiGTGiGeGiGxGiGtGiG GiG=GiG GiG"GiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGfGiGoGiGrGiGeGiGaGiGcGiGhGiG GiG(GiGvGiGaGiGrGiG GiGiGiGsGiGlGiGeGiGmGiG GiGiGiGnGiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGTGiGaGiGkGiGeGiG(GiG8GiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGkGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG GiG=GiG GiGiGiGsGiGlGiGeGiGmGiG.GiGTGiGuGiGtGiGaGiGrGiG GiG*GiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG.GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGOGiGrGiGaGiGnGiGiGiG GiG/GiG GiG1GiG0GiG0GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGsGiGlGiGeGiGmGiGLGiGiGiGsGiGtGiGeGiGsGiGiGiGTGiGeGiGxGiGtGiG GiG+GiG=GiG GiG$GiG"GiG•GiG GiG{GiGiGiGsGiGlGiGeGiGmGiG.GiGiGiGsGiGlGiGeGiGmGiGTGiGaGiGrGiGiGiGhGiGiGiG:GiGdGiGdGiG.GiGMGiGMGiG}GiG GiG-GiG GiG{GiGiGiGsGiGlGiGeGiGmGiG.GiGAGiGcGiGiGiGkGiGlGiGaGiGmGiGaGiG}GiG\GiGnGiG GiG GiG{GiGiGiGsGiGlGiGeGiGmGiG.GiGTGiGuGiGtGiGaGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG GiG(GiGKGiGoGiGmGiG:GiG GiG{GiGkGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG)GiG\GiGnGiG\GiGnGiG"GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGhGiGeGiGsGiGaGiGpGiGlGiGaGiGmGiGaGiGlGiGaGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGSGiGaGiGyGiGiGiGsGiGiGiG GiG=GiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGTGiGuGiGtGiGaGiGrGiG GiG=GiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGTGiGuGiGtGiGaGiGrGiGDGiGoGiGlGiGaGiGrGiG GiG=GiG GiGtGiGoGiGpGiGlGiGaGiGmGiGTGiGuGiGtGiGaGiGrGiG GiG/GiG GiGdGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG GiG=GiG GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGSGiGuGiGmGiG(GiGiGiG GiG=GiG>GiG GiGiGiG.GiGTGiGuGiGtGiGaGiGrGiG GiG*GiG GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG.GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGOGiGrGiGaGiGnGiGiGiG GiG/GiG GiG1GiG0GiG0GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGoGiGpGiGlGiGaGiGmGiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGDGiGoGiGlGiGaGiGrGiG GiG=GiG GiGtGiGoGiGpGiGlGiGaGiGmGiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG GiG/GiG GiGdGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGtGiGeGiGxGiGtGiG GiG=GiG GiG$GiG"GiGPGiGEGiGRGiGSGiGOGiGNGiGEGiGLGiG GiGRGiGAGiGPGiGOGiGRGiGUGiG\GiGnGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiG{GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG.GiGAGiGdGiGSGiGoGiGyGiGaGiGdGiG}GiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG GiGOGiGrGiGaGiGnGiGiGiG:GiG GiG%GiG{GiGpGiGeGiGrGiGsGiGoGiGnGiGeGiGlGiG.GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGOGiGrGiGaGiGnGiGiGiG:GiGFGiG1GiG}GiG\GiGnGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiG{GiGzGiGaGiGmGiGaGiGnGiGTGiGeGiGxGiGtGiG.GiGTGiGoGiGUGiGpGiGpGiGeGiGrGiG(GiG)GiG}GiG GiGiGiGSGiGLGiGEGiGMGiGLGiGEGiGRGiGiGiG:GiG\GiGnGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGsGiGlGiGeGiGmGiGLGiGiGiGsGiGtGiGeGiGsGiGiGiGTGiGeGiGxGiGtGiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG(GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG GiG>GiG GiG8GiG GiG$GiG"GiG.GiG.GiG.GiG GiGvGiGeGiG GiG{GiGiGiGsGiGlGiGeGiGmGiGlGiGeGiGrGiG.GiGCGiGoGiGuGiGnGiGtGiG GiG-GiG GiG8GiG}GiG GiGiGiGsGiGlGiGeGiGmGiG GiGdGiGaGiGhGiGaGiG\GiGnGiG\GiGnGiG"GiG GiG:GiG GiG"GiG\GiGnGiG"GiG)GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGOGiGZGiGEGiGTGiG:GiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGiGiGsGiGlGiGeGiGmGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGiGiGsGiGlGiGeGiGmGiGSGiGaGiGyGiGiGiGsGiGiGiG}GiG GiGaGiGdGiGeGiGtGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGTGiGuGiGtGiGaGiGrGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGTGiGuGiGtGiGaGiGrGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiG GiG GiG(GiG$GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGTGiGuGiGtGiGaGiGrGiGDGiGoGiGlGiGaGiGrGiG:GiGNGiG2GiG}GiG)GiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiGTGiGoGiGpGiGlGiGaGiGmGiG GiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG:GiG GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiG:GiGNGiG2GiG}GiG GiGTGiGLGiG\GiGnGiG"GiG GiG+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG$GiG"GiG GiG GiG(GiG$GiG{GiGtGiGoGiGpGiGlGiGaGiGmGiGKGiGoGiGmGiGiGiGsGiGyGiGoGiGnGiGDGiGoGiGlGiGaGiGrGiG:GiGNGiG2GiG}GiG)GiG"GiG;GiG
+GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGaGiGwGiGaGiGiGiGtGiG GiGbGiGoGiGtGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGEGiGdGiGiGiGtGiGMGiGeGiGsGiGsGiGaGiGgGiGeGiGTGiGeGiGxGiGtGiGAGiGsGiGyGiGnGiGcGiG(GiGcGiGhGiGaGiGtGiGiGiGdGiG,GiG GiGmGiGeGiGsGiGsGiGaGiGgGiGeGiGiGiGdGiG,GiG GiGtGiGeGiGxGiGtGiG,GiG GiGrGiGeGiGpGiGlGiGyGiGMGiGaGiGrGiGkGiGuGiGpGiG:GiG GiGkGiGeGiGyGiGbGiGoGiGaGiGrGiGdGiG,GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG:GiG GiGcGiGaGiGnGiGcGiGeGiGlGiGlGiGaGiGtGiGiGiGoGiGnGiGTGiGoGiGkGiGeGiGnGiG)GiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG GiG GiG GiG GiGpGiGrGiGiGiGvGiGaGiGtGiGeGiG GiGaGiGsGiGyGiGnGiGcGiG GiGTGiGaGiGsGiGkGiG<GiGdGiGeGiGcGiGiGiGmGiGaGiGlGiG>GiG GiGGGiGeGiGtGiGDGiGoGiGlGiGaGiGrGiGKGiGuGiGrGiGuGiGAGiGsGiGyGiGnGiGcGiG(GiG)GiG
+GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGtGiGrGiGyGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGuGiGsGiGiGiGnGiGgGiG GiGvGiGaGiGrGiG GiGhGiGtGiGtGiGpGiGCGiGlGiGiGiGeGiGnGiGtGiG GiG=GiG GiGnGiGeGiGwGiG GiGHGiGtGiGtGiGpGiGCGiGlGiGiGiGeGiGnGiGtGiG(GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGhGiGtGiGtGiGpGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGTGiGiGiGmGiGeGiGoGiGuGiGtGiG GiG=GiG GiGTGiGiGiGmGiGeGiGSGiGpGiGaGiGnGiG.GiGFGiGrGiGoGiGmGiGSGiGeGiGcGiGoGiGnGiGdGiGsGiG(GiG5GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGrGiGeGiGsGiGpGiGoGiGnGiGsGiGeGiG GiG=GiG GiGaGiGwGiGaGiGiGiGtGiG GiGhGiGtGiGtGiGpGiGCGiGlGiGiGiGeGiGnGiGtGiG.GiGGGiGeGiGtGiGSGiGtGiGrGiGiGiGnGiGgGiGAGiGsGiGyGiGnGiGcGiG(GiG"GiGhGiGtGiGtGiGpGiGsGiG:GiG/GiG/GiGaGiGpGiGiGiG.GiGeGiGxGiGcGiGhGiGaGiGnGiGgGiGeGiGrGiGaGiGtGiGeGiG-GiGaGiGpGiGiGiG.GiGcGiGoGiGmGiG/GiGvGiG4GiG/GiGlGiGaGiGtGiGeGiGsGiGtGiG/GiGUGiGSGiGDGiG"GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGvGiGaGiGrGiG GiGjGiGsGiGoGiGnGiGDGiGoGiGcGiG GiG=GiG GiGSGiGyGiGsGiGtGiGeGiGmGiG.GiGTGiGeGiGxGiGtGiG.GiGJGiGsGiGoGiGnGiG.GiGJGiGsGiGoGiGnGiGDGiGoGiGcGiGuGiGmGiGeGiGnGiGtGiG.GiGPGiGaGiGrGiGsGiGeGiG(GiGrGiGeGiGsGiGpGiGoGiGnGiGsGiGeGiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiGjGiGsGiGoGiGnGiGDGiGoGiGcGiG.GiGRGiGoGiGoGiGtGiGEGiGlGiGeGiGmGiGeGiGnGiGtGiG.GiGTGiGrGiGyGiGGGiGeGiGtGiGPGiGrGiGoGiGpGiGeGiGrGiGtGiGyGiG(GiG"GiGrGiGaGiGtGiGeGiGsGiG"GiG,GiG GiGoGiGuGiGtGiG GiGvGiGaGiGrGiG GiGrGiGaGiGtGiGeGiGsGiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGiGiGfGiG GiG(GiGrGiGaGiGtGiGeGiGsGiG.GiGTGiGrGiGyGiGGGiGeGiGtGiGPGiGrGiGoGiGpGiGeGiGrGiGtGiGyGiG(GiG"GiGTGiGRGiGYGiG"GiG,GiG GiGoGiGuGiGtGiG GiGvGiGaGiGrGiG GiGtGiGrGiGyGiGRGiGaGiGtGiGeGiG)GiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG GiGtGiGrGiGyGiGRGiGaGiGtGiGeGiG.GiGGGiGeGiGtGiGDGiGeGiGcGiGiGiGmGiGaGiGlGiG(GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGcGiGaGiGtGiGcGiGhGiG GiG(GiGEGiGxGiGcGiGeGiGpGiGtGiGiGiGoGiGnGiG GiGeGiGxGiG)GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG{GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG GiG_GiGlGiGoGiGgGiGgGiGeGiGrGiG.GiGLGiGoGiGgGiGWGiGaGiGrGiGnGiGiGiGnGiGgGiG(GiGeGiGxGiG,GiG GiG"GiGDGiGoGiGvGiGiGiGzGiG GiGkGiGuGiGrGiGuGiG GiGaGiGlGiGiGiGnGiGaGiGmGiGaGiGdGiGiGiG,GiG GiGvGiGaGiGrGiGsGiGaGiGyGiGiGiGlGiGaGiGnGiG GiGkGiGuGiGrGiG GiGkGiGuGiGlGiGlGiGaGiGnGiGiGiGlGiGiGiGyGiGoGiGrGiG"GiG)GiG;GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG}GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiG/GiG/GiG GiGVGiGaGiGrGiGsGiGaGiGyGiGiGiGlGiGaGiGnGiG GiGkGiGuGiGrGiG
+GiG GiG GiG GiG GiG GiG GiG GiG GiGrGiGeGiGtGiGuGiGrGiGnGiG GiG3GiG4GiG.GiG5GiG0GiGmGiG;GiG
+GiG GiG GiG GiG GiG}GiG
+GiG
+GiG}GiG
+GiG
+GiG

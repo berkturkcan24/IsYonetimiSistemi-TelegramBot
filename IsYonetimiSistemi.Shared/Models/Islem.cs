@@ -39,7 +39,7 @@ public class Islem
     public decimal? KullanilmisKur { get; set; }
     
     [MaxLength(20)]
-    public string Kaynak { get; set; } = "Muhasebe";
+    public string Kaynak { get; set; } = "Muhasebe";`n`n    // Paylasim orani (paylasilmis islemler icin)`n    public decimal? PaylasimOrani { get; set; }
     
     // Yetkili kullanici bilgileri
     public int? EkleyenKullaniciId { get; set; }
@@ -57,3 +57,4 @@ public class Islem
 
     public DateTime? GuncellenmeTarihi { get; set; }
 }
+
