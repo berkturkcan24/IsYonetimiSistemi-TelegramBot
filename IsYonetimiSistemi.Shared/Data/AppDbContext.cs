@@ -50,5 +50,10 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Personel>()
             .Property(p => p.KomisyonOrani)
             .HasPrecision(5, 2);
+            
+        modelBuilder.Entity<Islem>()
+            .Property(i => i.PaylasimOrani)
+            .HasPrecision(5, 2);
     }
 }
+
