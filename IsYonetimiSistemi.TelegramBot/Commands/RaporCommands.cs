@@ -12,6 +12,9 @@ public class RaporCommands
 {
     private readonly ILogger<RaporCommands> _logger;
     private readonly AppDbContext _context;
+    private static readonly HttpClient _httpClient = new();
+    private static readonly Dictionary<DateTime, decimal> _kurOnbellegi = new();
+    private const decimal VARSAYILAN_KUR = 34.50m;
 
     public RaporCommands(ILogger<RaporCommands> logger, AppDbContext context)
     {
@@ -59,16 +62,20 @@ public class RaporCommands
         var muhasebeGider = muhasebeIslemler.Where(i => i.Tip == "Gider").Sum(i => i.Tutar);
         var muhasebeNet = muhasebeGelir - muhasebeGider;
 
-        // Islemler kaynagindan toplam
+        // Islemler kaynagindan toplam - HER ISLEM KENDI KURU ILE
         var islemlerKaynak = await _context.Islemler
             .Where(i => i.Kaynak == "Islemler")
             .ToListAsync(cancellationToken);
         
         var toplamIslemTL = islemlerKaynak.Sum(i => i.Tutar);
         
-        // Doviz kuru
-        decimal dolarKuru = await GetDolarKuruAsync();
-        var toplamIslemUSD = toplamIslemTL / dolarKuru;
+        // DOGRU YONTEM: Her islem kendi kuru ile hesaplansin
+        decimal toplamIslemUSD = 0;
+        foreach (var islem in islemlerKaynak)
+        {
+            decimal islemKuru = await GetDolarKuruAsync(islem.IslemTarihi, islem.KullanilmisKur);
+            toplamIslemUSD += islem.Tutar / islemKuru;
+        }
 
         var text = $"MALI DURUM\n\n" +
                    $"MUHASEBE (Bu Ay):\n" +
@@ -273,9 +280,6 @@ public class RaporCommands
             return;
         }
 
-        // Doviz kuru bilgisi
-        decimal dolarKuru = await GetDolarKuruAsync();
-
         // Islem listesi olustur (en fazla 8 islem)
         var islemListesiText = "";
         foreach (var islem in islemler.Take(8))
@@ -297,25 +301,29 @@ public class RaporCommands
             islemListesiText += $"• {islem.IslemTarihi:dd.MM} - {islem.Aciklama}\n  {islem.Tutar:N2} TL (Kom: {komisyon:N2} TL)\n\n";
         }
 
-        // Toplam hesaplamalar - DOGRU YONTEM
+        // Toplam hesaplamalar - DOGRU YONTEM: HER ISLEM KENDI KURU ILE
         var toplamIslemSayisi = islemler.Count;
         var toplamTutar = islemler.Sum(i => i.Tutar);
-        var toplamTutarDolar = toplamTutar / dolarKuru;
-
-        // DOGRU TOPLAM KOMISYON HESAPLAMA
+        
+        // HER ISLEM KENDI TARIHI ILE HESAPLANSIN
+        decimal toplamTutarDolar = 0;
         decimal toplamKomisyon = 0;
+        decimal toplamKomisyonDolar = 0;
+
         foreach (var islem in islemler)
         {
-            if (islem.PaylasimOrani.HasValue)
-            {
-                toplamKomisyon += islem.Tutar * islem.PaylasimOrani.Value / 100;
-            }
-            else
-            {
-                toplamKomisyon += islem.Tutar * personel.KomisyonOrani / 100;
-            }
+            // Her islem icin o tarihteki kuru kullan
+            decimal islemKuru = await GetDolarKuruAsync(islem.IslemTarihi, islem.KullanilmisKur);
+            
+            // Komisyon hesapla
+            decimal komisyonOrani = islem.PaylasimOrani ?? personel.KomisyonOrani;
+            decimal komisyon = islem.Tutar * komisyonOrani / 100;
+            
+            // Dolara cevir - HER ISLEM KENDI KURU ILE
+            toplamTutarDolar += islem.Tutar / islemKuru;
+            toplamKomisyon += komisyon;
+            toplamKomisyonDolar += komisyon / islemKuru;
         }
-        var toplamKomisyonDolar = toplamKomisyon / dolarKuru;
 
         var text = $"PERSONEL RAPORU\n\n" +
                    $"{personel.AdSoyad}\n" +
@@ -333,30 +341,138 @@ public class RaporCommands
         await botClient.EditMessageTextAsync(chatId, messageId, text, replyMarkup: keyboard, cancellationToken: cancellationToken);
     }
 
-    private async Task<decimal> GetDolarKuruAsync()
+    /// <summary>
+    /// DESKTOP ILE AYNI MANTIK: Her islem kendi tarihindeki kuru kullanir
+    /// </summary>
+    private async Task<decimal> GetDolarKuruAsync(DateTime tarih, decimal? kullanilmisKur = null)
     {
         try
         {
-            using var httpClient = new HttpClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
-            var response = await httpClient.GetStringAsync("https://api.exchangerate-api.com/v4/latest/USD");
+            // 1. Once kayitli kur varsa onu kullan
+            if (kullanilmisKur.HasValue && kullanilmisKur.Value > 0)
+            {
+                _logger.LogDebug($"Kayitli kur kullaniliyor: {tarih:yyyy-MM-dd} = {kullanilmisKur.Value:F2} TL");
+                return kullanilmisKur.Value;
+            }
+
+            var tarihKey = tarih.Date;
+
+            // 2. Onbellekte var mi kontrol et
+            if (_kurOnbellegi.TryGetValue(tarihKey, out decimal onbellekKur))
+            {
+                _logger.LogDebug($"Kur onbellekten alindi: {tarihKey:yyyy-MM-dd} = {onbellekKur:F2} TL");
+                return onbellekKur;
+            }
+
+            decimal kur;
+
+            // 3. Bugun veya gelecek icin guncel kur
+            if (tarihKey >= DateTime.Today)
+            {
+                _logger.LogDebug($"Guncel kur cekiliyor: {tarihKey:yyyy-MM-dd}");
+                kur = await GetGuncelKurAsync();
+            }
+            else
+            {
+                // 4. GECMIS TARIH - GERCEK TARIHSEL KUR CEK!
+                _logger.LogDebug($"Tarihsel kur cekiliyor: {tarihKey:yyyy-MM-dd}");
+                kur = await GetTarihselKurAsync(tarihKey);
+            }
+
+            // Onbellege ekle
+            _kurOnbellegi[tarihKey] = kur;
+            _logger.LogDebug($"Kur onbellege eklendi: {tarihKey:yyyy-MM-dd} = {kur:F2} TL");
+
+            return kur;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, $"Kur alinamadi, varsayilan kullaniliyor: {tarih:yyyy-MM-dd}");
+            return VARSAYILAN_KUR;
+        }
+    }
+
+    /// <summary>
+    /// Guncel USD/TRY kuru
+    /// </summary>
+    private async Task<decimal> GetGuncelKurAsync()
+    {
+        try
+        {
+            _httpClient.Timeout = TimeSpan.FromSeconds(5);
+            var response = await _httpClient.GetStringAsync("https://api.exchangerate-api.com/v4/latest/USD");
             var jsonDoc = System.Text.Json.JsonDocument.Parse(response);
-            
+
             if (jsonDoc.RootElement.TryGetProperty("rates", out var rates))
             {
                 if (rates.TryGetProperty("TRY", out var tryRate))
                 {
-                    return tryRate.GetDecimal();
+                    var kur = tryRate.GetDecimal();
+                    _logger.LogInformation($"Guncel kur alindi: {kur:F2} TL");
+                    return kur;
                 }
             }
+
+            _logger.LogWarning("Guncel kur alinamadi (JSON parse hatasi)");
+            return VARSAYILAN_KUR;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Doviz kuru alinamadi, varsayilan kur kullaniliyor");
+            _logger.LogWarning(ex, "Guncel kur alinamadi");
+            return VARSAYILAN_KUR;
         }
-        
-        // Varsayilan kur
-        return 34.50m;
+    }
+
+    /// <summary>
+    /// Tarihsel USD/TRY kuru - exchangerate.host API
+    /// DESKTOP ILE AYNI API VE MANTIK
+    /// </summary>
+    private async Task<decimal> GetTarihselKurAsync(DateTime tarih)
+    {
+        try
+        {
+            // exchangerate.host API - Ucretsiz tarihsel kur destegi
+            // Format: https://api.exchangerate.host/2024-01-15?base=USD&symbols=TRY
+            var tarihStr = tarih.ToString("yyyy-MM-dd");
+            var url = $"https://api.exchangerate.host/{tarihStr}?base=USD&symbols=TRY";
+
+            _httpClient.Timeout = TimeSpan.FromSeconds(10);
+            var response = await _httpClient.GetStringAsync(url);
+            var jsonDoc = System.Text.Json.JsonDocument.Parse(response);
+
+            // API formati: {"success":true,"rates":{"TRY":34.5678}}
+            if (jsonDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean())
+            {
+                if (jsonDoc.RootElement.TryGetProperty("rates", out var rates))
+                {
+                    if (rates.TryGetProperty("TRY", out var tryRate))
+                    {
+                        var kur = tryRate.GetDecimal();
+                        _logger.LogInformation($"Tarihsel kur basariyla alindi: {tarihStr} = {kur:F2} TL");
+                        return kur;
+                    }
+                }
+            }
+
+            _logger.LogWarning($"Tarihsel kur alinamadi (API basarisiz): {tarihStr}");
+            
+            // Fallback: Guncel kur dene
+            return await GetGuncelKurAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, $"Tarihsel kur hatasi: {tarih:yyyy-MM-dd}");
+            
+            // Fallback: Guncel kur dene
+            try
+            {
+                return await GetGuncelKurAsync();
+            }
+            catch
+            {
+                return VARSAYILAN_KUR;
+            }
+        }
     }
 }
 
