@@ -162,9 +162,7 @@ public class BotUpdateHandler : IUpdateHandler
 					await _kasaCommands.ShowUsdtErc20Detay(botClient, chatId, messageId, cancellationToken);
 					break;
         
-				default:
-					_logger.LogWarning($"Unknown callback: {data}");
-					break;					
+				
                 default:
                     if (data.StartsWith("personel_rapor_gun_"))
                     {
