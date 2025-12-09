@@ -34,24 +34,24 @@ public class KasaCommands
     {
         var keyboard = new InlineKeyboardMarkup(new[]
         {
-            new[] { InlineKeyboardButton.WithCallbackData("?? KASA OZET", "kasa_ozet") },
+            new[] { InlineKeyboardButton.WithCallbackData("📊 KASA OZET", "kasa_ozet") },
             new[] 
             { 
-                InlineKeyboardButton.WithCallbackData("?? Litecoin (LTC)", "kasa_ltc"),
-                InlineKeyboardButton.WithCallbackData("? Tron (TRX)", "kasa_trx")
+                InlineKeyboardButton.WithCallbackData("💷 Litecoin (LTC)", "kasa_ltc"),
+                InlineKeyboardButton.WithCallbackData("💴 Tron (TRX)", "kasa_trx")
             },
             new[] 
             { 
-                InlineKeyboardButton.WithCallbackData("?? USDT (TRC20)", "kasa_usdt_trc20"),
-                InlineKeyboardButton.WithCallbackData("?? USDT (ERC20)", "kasa_usdt_erc20")
+                InlineKeyboardButton.WithCallbackData("💵 USDT (TRC20)", "kasa_usdt_trc20"),
+                InlineKeyboardButton.WithCallbackData("💵 USDT (ERC20)", "kasa_usdt_erc20")
             },
             new[] { InlineKeyboardButton.WithCallbackData("?? Ana Menu", "main_menu") }
         });
 
-        var text = "?? KASA MENU\n\n" +
+        var text = "💲 KASA MENU\n\n" +
                    "Kripto para cuzdan bakiyelerinizi goruntuleyin.\n\n" +
-                   "� Ozet: Tum cuzdan bakiyeleri\n" +
-                   "� Detay: Son 5 islem ge�mi�i";
+                   "• Ozet: Tum cuzdan bakiyeleri\n" +
+                   "• Detay: Son 5 islem geçmişi";
 
         await botClient.EditMessageTextAsync(
             chatId, 
@@ -71,7 +71,7 @@ public class KasaCommands
         await botClient.EditMessageTextAsync(
             chatId, 
             messageId, 
-            "? Bakiyeler y�kleniyor...", 
+            "? Bakiyeler yükleniyor...", 
             replyMarkup: loadingKeyboard, 
             cancellationToken: cancellationToken);
 
@@ -670,3 +670,4 @@ public class Transaction
     public DateTime Date { get; set; }
     public string Type { get; set; } = ""; // "Yatirim" veya "Cekim"
 }
+
