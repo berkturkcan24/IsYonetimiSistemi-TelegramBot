@@ -409,10 +409,10 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
 
     private async Task SendUnauthorizedMessage(ITelegramBotClient botClient, long chatId, CancellationToken cancellationToken)
     {
-        var message = "?? <b>YETKISIZ ERISIM</b>\n\n" +
-                     "? Bu botu kullanma yetkiniz bulunmamaktadir.\n\n" +
-                     $"?? Chat ID: <code>{chatId}</code>\n\n" +
-                     "?? Erisim iÃ§in sistem yÃ¶neticisi ile iletisime geÃ§iniz.";
+        var message = "<b>YETKISIZ ERISIM</b>\n\n" +
+                     "Bu botu kullanma yetkiniz bulunmamaktadir.\n\n" +
+                     $"Chat ID: <code>{chatId}</code>\n\n" +
+                     "Erisim icin sistem yoneticisi ile iletisime geciniz.";
 
         await botClient.SendTextMessageAsync(
             chatId,
@@ -430,3 +430,4 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         return Task.CompletedTask;
     }
 }
+
