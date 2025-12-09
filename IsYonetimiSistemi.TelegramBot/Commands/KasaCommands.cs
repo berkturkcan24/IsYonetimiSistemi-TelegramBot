@@ -471,8 +471,65 @@ public class KasaCommands
     {
         try
         {
-            // TODO: TronGrid API ile islem gecmisi
-            return new List<Transaction>();
+            var url = $"https://api.trongrid.io/v1/accounts/{TRON_ADDRESS}/transactions?limit=20";
+            var response = await _httpClient.GetStringAsync(url);
+            var json = JsonDocument.Parse(response);
+            
+            var transactions = new List<Transaction>();
+            
+            if (json.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var tx in data.EnumerateArray().Take(20))
+                {
+                    // Transaction type ve value kontrolu
+                    if (!tx.TryGetProperty("raw_data", out var rawData)) continue;
+                    if (!rawData.TryGetProperty("contract", out var contracts)) continue;
+                    
+                    var contractArray = contracts.EnumerateArray().ToList();
+                    if (contractArray.Count == 0) continue;
+                    
+                    var contract = contractArray[0];
+                    if (!contract.TryGetProperty("parameter", out var parameter)) continue;
+                    if (!parameter.TryGetProperty("value", out var value)) continue;
+                    
+                    // Transfer amount (sun to TRX)
+                    var amount = value.TryGetProperty("amount", out var amountProp) 
+                        ? amountProp.GetInt64() / 1_000_000m 
+                        : 0;
+                    
+                    if (amount <= 0) continue;
+                    
+                    // Timestamp
+                    var timestamp = tx.TryGetProperty("block_timestamp", out var ts) 
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts.GetInt64()).DateTime 
+                        : DateTime.Now;
+                    
+                    // Transfer direction (owner_address vs to_address)
+                    var ownerAddress = value.TryGetProperty("owner_address", out var owner) 
+                        ? owner.GetString() ?? "" 
+                        : "";
+                    var toAddress = value.TryGetProperty("to_address", out var to) 
+                        ? to.GetString() ?? "" 
+                        : "";
+                    
+                    // Convert hex addresses to base58 for comparison
+                    var txType = toAddress.Equals(TRON_ADDRESS, StringComparison.OrdinalIgnoreCase) || 
+                                 toAddress.Contains(TRON_ADDRESS.ToLower()) 
+                        ? "Yatirim" 
+                        : "Cekim";
+                    
+                    transactions.Add(new Transaction
+                    {
+                        Amount = amount,
+                        Date = timestamp,
+                        Type = txType
+                    });
+                    
+                    if (transactions.Count >= 5) break;
+                }
+            }
+            
+            return transactions;
         }
         catch (Exception ex)
         {
@@ -485,8 +542,54 @@ public class KasaCommands
     {
         try
         {
-            // TODO: TronGrid API ile USDT islem gecmisi
-            return new List<Transaction>();
+            // USDT TRC20 contract address
+            var usdtContract = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+            var url = $"https://api.trongrid.io/v1/accounts/{USDT_TRC20_ADDRESS}/transactions/trc20?limit=20&contract_address={usdtContract}";
+            var response = await _httpClient.GetStringAsync(url);
+            var json = JsonDocument.Parse(response);
+            
+            var transactions = new List<Transaction>();
+            
+            if (json.RootElement.TryGetProperty("data", out var data))
+            {
+                foreach (var tx in data.EnumerateArray().Take(20))
+                {
+                    // Value in smallest unit (6 decimals for USDT)
+                    var value = tx.TryGetProperty("value", out var val) 
+                        ? decimal.Parse(val.GetString() ?? "0") / 1_000_000m 
+                        : 0;
+                    
+                    if (value <= 0) continue;
+                    
+                    // Timestamp
+                    var timestamp = tx.TryGetProperty("block_timestamp", out var ts) 
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts.GetInt64()).DateTime 
+                        : DateTime.Now;
+                    
+                    // Transfer direction
+                    var from = tx.TryGetProperty("from", out var fromAddr) 
+                        ? fromAddr.GetString() ?? "" 
+                        : "";
+                    var to = tx.TryGetProperty("to", out var toAddr) 
+                        ? toAddr.GetString() ?? "" 
+                        : "";
+                    
+                    var txType = to.Equals(USDT_TRC20_ADDRESS, StringComparison.OrdinalIgnoreCase) 
+                        ? "Yatirim" 
+                        : "Cekim";
+                    
+                    transactions.Add(new Transaction
+                    {
+                        Amount = value,
+                        Date = timestamp,
+                        Type = txType
+                    });
+                    
+                    if (transactions.Count >= 5) break;
+                }
+            }
+            
+            return transactions;
         }
         catch (Exception ex)
         {
@@ -499,8 +602,57 @@ public class KasaCommands
     {
         try
         {
-            // TODO: Etherscan API ile USDT islem gecmisi
-            return new List<Transaction>();
+            // USDT ERC20 contract address
+            var usdtContract = "0xdac17f958d2ee523a2206206994597c13d831ec7";
+            
+            // Etherscan API - using public endpoint (rate limited)
+            var url = $"{ETHEREUM_API}?module=account&action=tokentx&contractaddress={usdtContract}&address={USDT_ERC20_ADDRESS}&sort=desc&page=1&offset=20";
+            
+            var response = await _httpClient.GetStringAsync(url);
+            var json = JsonDocument.Parse(response);
+            
+            var transactions = new List<Transaction>();
+            
+            if (json.RootElement.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var tx in result.EnumerateArray().Take(20))
+                {
+                    // Value in smallest unit (6 decimals for USDT)
+                    var value = tx.TryGetProperty("value", out var val) 
+                        ? decimal.Parse(val.GetString() ?? "0") / 1_000_000m 
+                        : 0;
+                    
+                    if (value <= 0) continue;
+                    
+                    // Timestamp
+                    var timestamp = tx.TryGetProperty("timeStamp", out var ts) 
+                        ? DateTimeOffset.FromUnixTimeSeconds(long.Parse(ts.GetString() ?? "0")).DateTime 
+                        : DateTime.Now;
+                    
+                    // Transfer direction
+                    var from = tx.TryGetProperty("from", out var fromAddr) 
+                        ? fromAddr.GetString() ?? "" 
+                        : "";
+                    var to = tx.TryGetProperty("to", out var toAddr) 
+                        ? toAddr.GetString() ?? "" 
+                        : "";
+                    
+                    var txType = to.Equals(USDT_ERC20_ADDRESS, StringComparison.OrdinalIgnoreCase) 
+                        ? "Yatirim" 
+                        : "Cekim";
+                    
+                    transactions.Add(new Transaction
+                    {
+                        Amount = value,
+                        Date = timestamp,
+                        Type = txType
+                    });
+                    
+                    if (transactions.Count >= 5) break;
+                }
+            }
+            
+            return transactions;
         }
         catch (Exception ex)
         {
