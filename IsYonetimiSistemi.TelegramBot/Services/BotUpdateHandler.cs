@@ -196,26 +196,26 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ‘¤ Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("ğŸ§¾ Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
+                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ“Š Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("ğŸ” Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
-                InlineKeyboardButton.WithCallbackData("? Yardim", "yardim"),
-				InlineKeyboardButton.WithCallbackData("ğŸ’° Kasa", "menu_kasa")
+                InlineKeyboardButton.WithCallbackData("💸 Hakedis", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("❓ Yardim", "yardim"),
+				InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
             }
         });
 
         await botClient.SendTextMessageAsync(
             chatId,
-            "ANA MENU\n\nBilgi GÃ¶rÃ¼ntÃ¼leme ve Raporlama\n\n" +
-            "Not: islem ekleme sadece masaÃ¼stÃ¼ uygulamadan yapilabilir.",
+            "ANA MENU\n\nBilgi Görüntüleme ve Raporlama\n\n" +
+            "Not: islem ekleme sadece Masaüstü uygulamadan yapilabilir.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -227,17 +227,17 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ‘¤ Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("ğŸ§¾ Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
+                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ“Š Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("ğŸ” Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
                 InlineKeyboardButton.WithCallbackData("❓ Yardim", "yardim"),
 InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
             }
@@ -245,8 +245,8 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "ANA MENU\n\nBilgi GÃ¶rÃ¼ntÃ¼leme ve Raporlama\n\n" +
-            "Not: islem ekleme sadece masaÃ¼stÃ¼ uygulamadan yapilabilir.",
+            "ANA MENU\n\nBilgi Görüntüleme ve Raporlama\n\n" +
+            "Not: islem ekleme sadece masaüstü uygulamadan yapilabilir.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -258,11 +258,11 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ“¥ Gelirler Listesi", "muhasebe_gelir")
+                InlineKeyboardButton.WithCallbackData("📥 Gelirler Listesi", "muhasebe_gelir")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ“¤ Giderler Listesi", "muhasebe_gider")
+                InlineKeyboardButton.WithCallbackData("📤 Giderler Listesi", "muhasebe_gider")
             },
             new[]
             {
@@ -274,10 +274,10 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
             chatId,
             messageId,
             "MUHASEBE\n\n" +
-            "Muhasebe kayitlarini gÃ¶rÃ¼ntÃ¼leyin:\n" +
-            "ğŸ“¥ Gelirler listesi\n" +
-            "ğŸ“¤ Giderler listesi\n\n" +
-            "Islem ekleme iÃ§in masaÃ¼stÃ¼ uygulamayi kullanin.",
+            "Muhasebe kayitlarini görüntüleyin:\n" +
+            "📥 Gelirler listesi\n" +
+            "📤 Giderler listesi\n\n" +
+            "Islem ekleme için masaüstü uygulamayi kullanin.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -289,7 +289,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Son 1 GÃ¼n", "personel_islem_1gun")
+                InlineKeyboardButton.WithCallbackData("Son 1 gün", "personel_islem_1gun")
             },
             new[]
             {
@@ -308,7 +308,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "ğŸ” PERSONEL ISLEMLERI\n\nZaman araligi seÃ§in:",
+            "🔍 PERSONEL ISLEMLERI\n\nZaman araligi seçin:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -320,11 +320,11 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Genel Performans", "rapor_performans")
+                InlineKeyboardButton.WithCallbackData("📈 Genel Performans", "rapor_performans")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "rapor_personel_zaman_sec")
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "rapor_personel_zaman_sec")
             },
             new[]
             {
@@ -335,7 +335,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "ğŸ’¸ HAKEDÄ°Å\n\nDetayli raporlari gÃ¶rÃ¼ntÃ¼leyebilirsiniz:",
+            "💸 HAKEDIS\n\nDetayli raporlari görüntüleyebilirsiniz:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -347,7 +347,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Son 1 GÃ¼n", "personel_rapor_gun_1_")
+                InlineKeyboardButton.WithCallbackData("Son 1 gün", "personel_rapor_gun_1_")
             },
             new[]
             {
@@ -359,7 +359,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
                 InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
@@ -367,7 +367,7 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "PERSONEL RAPORU\n\nZaman araligi seÃ§in:",
+            "PERSONEL RAPORU\n\nZaman araligi seçin:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -384,19 +384,19 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         });
 
         var helpText = "YARDIM\n\n" +
-                      "Bu bot sadece bilgi gÃ¶rÃ¼ntÃ¼leme amaÃ§lidir.\n\n" +
+                      "Bu bot sadece bilgi görüntüleme amaçlıdır.\n\n" +
                       "YAPILABILENLER:\n" +
-                      "ğŸ‘¤ Personel listesi gÃ¶rÃ¼ntÃ¼leme\n" +
-                      "ğŸ’° Mali durum kontrolÃ¼\n" +
-                      "ğŸ“– Muhasebe kayitlari inceleme\n" +
-                      "ğŸ‘¤ Personel islem geÃ§misi\n" +
-                      "ğŸ“ˆ Performans raporlari\n\n" +
+                      "👤 Personel listesi gÃ¶rÃ¼ntÃ¼leme\n" +
+                      "📊 Mali durum kontrolÃ¼\n" +
+                      "📊 Muhasebe kayitlari inceleme\n" +
+                      "🔍 Personel islem geÃ§misi\n" +
+                      "📈 Performans raporlari\n\n" +
                       "YAPILAM AYANLAR:\n" +
-                      "Â• Islem ekleme\n" +
-                      "Â• Gelir/Gider ekleme\n" +
-                      "Â• Kayit dÃ¼zenleme\n" +
-                      "Â• Kayit silme\n\n" +
-                      "Bu islemler iÃ§in masaÃ¼stÃ¼ uygulamayi kullanin.";
+                      "• Islem ekleme\n" +
+                      "• Gelir/Gider ekleme\n" +
+                      "• Kayit dÃ¼zenleme\n" +
+                      "• Kayit silme\n\n" +
+                      "Bu islemler için masaüstü uygulamayi kullanin.";
 
         await botClient.EditMessageTextAsync(
             chatId,
@@ -430,4 +430,5 @@ InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
         return Task.CompletedTask;
     }
 }
+
 
