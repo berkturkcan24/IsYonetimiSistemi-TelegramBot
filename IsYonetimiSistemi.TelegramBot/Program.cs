@@ -36,6 +36,7 @@ builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(botToken
 builder.Services.AddScoped<AuthorizationService>();
 builder.Services.AddScoped<BotUpdateHandler>();
 builder.Services.AddScoped<RaporCommands>();
+builder.Services.AddScoped<KasaCommands>();
 
 // Hosted Service for Telegram Bot
 builder.Services.AddHostedService<TelegramBotHostedService>();
