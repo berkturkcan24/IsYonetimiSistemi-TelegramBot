@@ -15,6 +15,7 @@ public class KasaCommands
     // Cuzdan adresleri
     private const string LTC_ADDRESS = "LhqaeRQJmQjoEfjkrXyXQgMaU3LiTzqQ41";
     private const string TRON_ADDRESS = "TVhcDC9LmmLW4ddxGwutjhGn8m8D6xLuqs";
+    private const string TRON_ADDRESS_HEX = "41d86f3bfec93eca6368b9fa36a465253fa25f2e1f"; // Hex format
     private const string USDT_TRC20_ADDRESS = "TVhcDC9LmmLW4ddxGwutjhGn8m8D6xLuqs";
     private const string USDT_ERC20_ADDRESS = "0xDD2B447A95c348CfaF97C76e35DE4F8617a961a6";
     
@@ -512,11 +513,10 @@ public class KasaCommands
                         ? to.GetString() ?? "" 
                         : "";
                     
-                    // Convert hex addresses to base58 for comparison
-                    var txType = toAddress.Equals(TRON_ADDRESS, StringComparison.OrdinalIgnoreCase) || 
-                                 toAddress.Contains(TRON_ADDRESS.ToLower()) 
-                        ? "Yatirim" 
-                        : "Cekim";
+                    // Hex address comparison
+                    var txType = toAddress.Equals(TRON_ADDRESS_HEX, StringComparison.OrdinalIgnoreCase) 
+                        ? "Yatirim"  // Bize gelen (to_address = bizim adres)
+                        : "Cekim";   // Bizden giden (owner_address = bizim adres)
                     
                     transactions.Add(new Transaction
                     {
@@ -574,7 +574,9 @@ public class KasaCommands
                         ? toAddr.GetString() ?? "" 
                         : "";
                     
-                    var txType = to.Equals(USDT_TRC20_ADDRESS, StringComparison.OrdinalIgnoreCase) 
+                    // TRC20 uses base58 addresses, check both formats
+                    var txType = to.Equals(USDT_TRC20_ADDRESS, StringComparison.OrdinalIgnoreCase) ||
+                                 to.Equals(TRON_ADDRESS_HEX, StringComparison.OrdinalIgnoreCase)
                         ? "Yatirim" 
                         : "Cekim";
                     

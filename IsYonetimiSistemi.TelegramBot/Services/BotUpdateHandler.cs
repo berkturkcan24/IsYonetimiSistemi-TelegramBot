@@ -1,4 +1,4 @@
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -31,7 +31,7 @@ public class BotUpdateHandler : IUpdateHandler
     {
         try
         {
-            // Chat ID kontrolü
+            // Chat ID kontrolÃ¼
             long chatId = 0;
             if (update.Type == UpdateType.Message && update.Message != null)
             {
@@ -42,20 +42,20 @@ public class BotUpdateHandler : IUpdateHandler
                 chatId = update.CallbackQuery.Message.Chat.Id;
             }
 
-            // Chat ID'yi logla (debug için)
+            // Chat ID'yi logla (debug iÃ§in)
             if (chatId != 0)
             {
                 _logger.LogInformation($"Incoming request from Chat ID: {chatId}");
             }
 
-            // Yetkilendirme kontrolü
+            // Yetkilendirme kontrolÃ¼
             if (chatId != 0 && !_authorizationService.IsAuthorized(chatId))
             {
                 await SendUnauthorizedMessage(botClient, chatId, cancellationToken);
                 return;
             }
 
-            // Yetkili kullanýcý - iþlemleri devam ettir
+            // Yetkili kullanÃ½cÃ½ - iÃ¾lemleri devam ettir
             if (update.Type == UpdateType.Message && update.Message?.Text != null)
             {
                 await HandleMessageAsync(botClient, update.Message, cancellationToken);
@@ -84,7 +84,7 @@ public class BotUpdateHandler : IUpdateHandler
             return;
         }
 
-        // Varsayýlan: Ana menü göster
+        // VarsayÃ½lan: Ana menÃ¼ gÃ¶ster
         await SendMainMenu(botClient, chatId, cancellationToken);
     }
 
@@ -196,26 +196,26 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("ğŸ‘¤ Personeller", "menu_personeller"),
+                InlineKeyboardButton.WithCallbackData("ğŸ§¾ Durum", "menu_durum")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("ğŸ“Š Gelir-Gider", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("ğŸ” Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
                 InlineKeyboardButton.WithCallbackData("? Yardim", "yardim"),
-				InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
+				InlineKeyboardButton.WithCallbackData("ğŸ’° Kasa", "menu_kasa")
             }
         });
 
         await botClient.SendTextMessageAsync(
             chatId,
-            "ANA MENU\n\nBilgi Görüntüleme ve Raporlama\n\n" +
-            "Not: islem ekleme sadece masaüstü uygulamadan yapilabilir.",
+            "ANA MENU\n\nBilgi GÃ¶rÃ¼ntÃ¼leme ve Raporlama\n\n" +
+            "Not: islem ekleme sadece masaÃ¼stÃ¼ uygulamadan yapilabilir.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -227,26 +227,26 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("👤 Personeller", "menu_personeller"),
-                InlineKeyboardButton.WithCallbackData("🧾 Durum", "menu_durum")
+                InlineKeyboardButton.WithCallbackData("ğŸ‘¤ Personeller", "menu_personeller"),
+                InlineKeyboardButton.WithCallbackData("ğŸ§¾ Durum", "menu_durum")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📊 Gelir-Gider", "menu_muhasebe"),
-                InlineKeyboardButton.WithCallbackData("🔍 Personel Islemler", "menu_personel_islemler")
+                InlineKeyboardButton.WithCallbackData("ğŸ“Š Gelir-Gider", "menu_muhasebe"),
+                InlineKeyboardButton.WithCallbackData("ğŸ” Personel Islemler", "menu_personel_islemler")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
-                InlineKeyboardButton.WithCallbackData("? Yardim", "yardim")
+                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("❓ Yardim", "yardim"),
+InlineKeyboardButton.WithCallbackData("💰 Kasa", "menu_kasa")
             }
         });
-
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "ANA MENU\n\nBilgi Görüntüleme ve Raporlama\n\n" +
-            "Not: islem ekleme sadece masaüstü uygulamadan yapilabilir.",
+            "ANA MENU\n\nBilgi GÃ¶rÃ¼ntÃ¼leme ve Raporlama\n\n" +
+            "Not: islem ekleme sadece masaÃ¼stÃ¼ uygulamadan yapilabilir.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -258,11 +258,11 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📥 Gelirler Listesi", "muhasebe_gelir")
+                InlineKeyboardButton.WithCallbackData("ğŸ“¥ Gelirler Listesi", "muhasebe_gelir")
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("📤 Giderler Listesi", "muhasebe_gider")
+                InlineKeyboardButton.WithCallbackData("ğŸ“¤ Giderler Listesi", "muhasebe_gider")
             },
             new[]
             {
@@ -274,10 +274,10 @@ public class BotUpdateHandler : IUpdateHandler
             chatId,
             messageId,
             "MUHASEBE\n\n" +
-            "Muhasebe kayitlarini görüntüleyin:\n" +
-            "📥 Gelirler listesi\n" +
-            "📤 Giderler listesi\n\n" +
-            "Islem ekleme için masaüstü uygulamayi kullanin.",
+            "Muhasebe kayitlarini gÃ¶rÃ¼ntÃ¼leyin:\n" +
+            "ğŸ“¥ Gelirler listesi\n" +
+            "ğŸ“¤ Giderler listesi\n\n" +
+            "Islem ekleme iÃ§in masaÃ¼stÃ¼ uygulamayi kullanin.",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -289,7 +289,7 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Son 1 Gün", "personel_islem_1gun")
+                InlineKeyboardButton.WithCallbackData("Son 1 GÃ¼n", "personel_islem_1gun")
             },
             new[]
             {
@@ -308,7 +308,7 @@ public class BotUpdateHandler : IUpdateHandler
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "🔍 PERSONEL ISLEMLERI\n\nZaman araligi seçin:",
+            "ğŸ” PERSONEL ISLEMLERI\n\nZaman araligi seÃ§in:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -324,7 +324,7 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "rapor_personel_zaman_sec")
+                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "rapor_personel_zaman_sec")
             },
             new[]
             {
@@ -335,7 +335,7 @@ public class BotUpdateHandler : IUpdateHandler
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "💸 HAKEDİŞ\n\nDetayli raporlari görüntüleyebilirsiniz:",
+            "ğŸ’¸ HAKEDÄ°Å\n\nDetayli raporlari gÃ¶rÃ¼ntÃ¼leyebilirsiniz:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -347,7 +347,7 @@ public class BotUpdateHandler : IUpdateHandler
         {
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("Son 1 Gün", "personel_rapor_gun_1_")
+                InlineKeyboardButton.WithCallbackData("Son 1 GÃ¼n", "personel_rapor_gun_1_")
             },
             new[]
             {
@@ -359,7 +359,7 @@ public class BotUpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("💸 Hakediş", "menu_raporlar"),
+                InlineKeyboardButton.WithCallbackData("ğŸ’¸ HakediÅŸ", "menu_raporlar"),
                 InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu")
             }
         });
@@ -367,7 +367,7 @@ public class BotUpdateHandler : IUpdateHandler
         await botClient.EditMessageTextAsync(
             chatId,
             messageId,
-            "PERSONEL RAPORU\n\nZaman araligi seçin:",
+            "PERSONEL RAPORU\n\nZaman araligi seÃ§in:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken
         );
@@ -384,19 +384,19 @@ public class BotUpdateHandler : IUpdateHandler
         });
 
         var helpText = "YARDIM\n\n" +
-                      "Bu bot sadece bilgi görüntüleme amaçlidir.\n\n" +
+                      "Bu bot sadece bilgi gÃ¶rÃ¼ntÃ¼leme amaÃ§lidir.\n\n" +
                       "YAPILABILENLER:\n" +
-                      "👤 Personel listesi görüntüleme\n" +
-                      "💰 Mali durum kontrolü\n" +
-                      "📖 Muhasebe kayitlari inceleme\n" +
-                      "👤 Personel islem geçmisi\n" +
-                      "📈 Performans raporlari\n\n" +
+                      "ğŸ‘¤ Personel listesi gÃ¶rÃ¼ntÃ¼leme\n" +
+                      "ğŸ’° Mali durum kontrolÃ¼\n" +
+                      "ğŸ“– Muhasebe kayitlari inceleme\n" +
+                      "ğŸ‘¤ Personel islem geÃ§misi\n" +
+                      "ğŸ“ˆ Performans raporlari\n\n" +
                       "YAPILAM AYANLAR:\n" +
-                      " Islem ekleme\n" +
-                      " Gelir/Gider ekleme\n" +
-                      " Kayit düzenleme\n" +
-                      " Kayit silme\n\n" +
-                      "Bu islemler için masaüstü uygulamayi kullanin.";
+                      "Â• Islem ekleme\n" +
+                      "Â• Gelir/Gider ekleme\n" +
+                      "Â• Kayit dÃ¼zenleme\n" +
+                      "Â• Kayit silme\n\n" +
+                      "Bu islemler iÃ§in masaÃ¼stÃ¼ uygulamayi kullanin.";
 
         await botClient.EditMessageTextAsync(
             chatId,
@@ -412,7 +412,7 @@ public class BotUpdateHandler : IUpdateHandler
         var message = "?? <b>YETKISIZ ERISIM</b>\n\n" +
                      "? Bu botu kullanma yetkiniz bulunmamaktadir.\n\n" +
                      $"?? Chat ID: <code>{chatId}</code>\n\n" +
-                     "?? Erisim için sistem yöneticisi ile iletisime geçiniz.";
+                     "?? Erisim iÃ§in sistem yÃ¶neticisi ile iletisime geÃ§iniz.";
 
         await botClient.SendTextMessageAsync(
             chatId,
