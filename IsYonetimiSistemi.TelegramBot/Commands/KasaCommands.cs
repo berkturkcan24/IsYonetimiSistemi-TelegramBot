@@ -98,42 +98,42 @@ public class KasaCommands
             var usdTry = await GetUsdTryKuruAsync();
             var toplamTry = toplamUsd * usdTry;
 
-            var text = "?? KASA OZET\n" +
-                       "???????????????????\n\n" +
-                       $"?? Litecoin (LTC)\n" +
+            var text = "📊 KASA OZET\n" +
+                       "##################\n\n" +
+                       $"💷 Litecoin (LTC)\n" +
                        $"   Bakiye: {ltcBalance:F8} LTC\n" +
                        $"   Fiyat: ${ltcPrice:F2}\n" +
                        $"   Toplam: ${ltcUsd:F2}\n\n" +
-                       $"? Tron (TRX)\n" +
+                       $"💴 Tron (TRX)\n" +
                        $"   Bakiye: {trxBalance:F8} TRX\n" +
                        $"   Fiyat: ${trxPrice:F4}\n" +
                        $"   Toplam: ${trxUsd:F2}\n\n" +
-                       $"?? USDT (TRC20)\n" +
+                       $"💵 USDT (TRC20)\n" +
                        $"   Bakiye: {usdtTrc20Balance:F2} USDT\n" +
                        $"   Toplam: ${usdtTrc20Usd:F2}\n\n" +
-                       $"?? USDT (ERC20)\n" +
+                       $"💵 USDT (ERC20)\n" +
                        $"   Bakiye: {usdtErc20Balance:F2} USDT\n" +
                        $"   Toplam: ${usdtErc20Usd:F2}\n\n" +
-                       "???????????????????\n" +
-                       $"?? TOPLAM\n" +
+                       "##################\n" +
+                       $"💵 TOPLAM\n" +
                        $"   ${toplamUsd:F2} USD\n" +
                        $"   ?{toplamTry:F2} TRY\n\n" +
-                       $"?? Son Guncelleme: {DateTime.Now:HH:mm:ss}";
+                       $"🔄 Son Guncelleme: {DateTime.Now:HH:mm:ss}";
 
             var keyboard = new InlineKeyboardMarkup(new[]
             {
                 new[] 
                 { 
-                    InlineKeyboardButton.WithCallbackData("?? LTC Detay", "kasa_ltc"),
-                    InlineKeyboardButton.WithCallbackData("? TRX Detay", "kasa_trx")
+                    InlineKeyboardButton.WithCallbackData("💷 LTC Detay", "kasa_ltc"),
+                    InlineKeyboardButton.WithCallbackData("💴 TRX Detay", "kasa_trx")
                 },
                 new[] 
                 { 
-                    InlineKeyboardButton.WithCallbackData("?? USDT TRC20", "kasa_usdt_trc20"),
-                    InlineKeyboardButton.WithCallbackData("?? USDT ERC20", "kasa_usdt_erc20")
+                    InlineKeyboardButton.WithCallbackData("💵 USDT TRC20", "kasa_usdt_trc20"),
+                    InlineKeyboardButton.WithCallbackData("💵 USDT ERC20", "kasa_usdt_erc20")
                 },
-                new[] { InlineKeyboardButton.WithCallbackData("?? Yenile", "kasa_ozet") },
-                new[] { InlineKeyboardButton.WithCallbackData("?? Kasa Menu", "menu_kasa") }
+                new[] { InlineKeyboardButton.WithCallbackData("🔄 Yenile", "kasa_ozet") },
+                new[] { InlineKeyboardButton.WithCallbackData("💰 Kasa Menu", "menu_kasa") }
             });
 
             await botClient.EditMessageTextAsync(
@@ -193,7 +193,7 @@ public class KasaCommands
     {
         var loadingKeyboard = new InlineKeyboardMarkup(new[]
         {
-            new[] { InlineKeyboardButton.WithCallbackData("?? Kasa Ozet", "kasa_ozet") }
+            new[] { InlineKeyboardButton.WithCallbackData("📊 Kasa Ozet", "kasa_ozet") }
         });
 
         await botClient.EditMessageTextAsync(
@@ -240,20 +240,20 @@ public class KasaCommands
             var totalTry = totalUsd * usdTry;
 
             var text = $"?? {cryptoName} ({symbol})\n" +
-                       "???????????????????\n\n" +
-                       $"?? BAKIYE\n" +
+                       "###################\n\n" +
+                       $" BAKIYE\n" +
                        $"   {balance:F8} {symbol.Replace("-TRC20", "").Replace("-ERC20", "")}\n" +
                        $"   ${totalUsd:F2} USD\n" +
                        $"   ?{totalTry:F2} TRY\n\n" +
-                       $"?? FIYAT\n" +
+                       $"💱 FIYAT\n" +
                        $"   ${price:F4} USD\n\n" +
                        $"?? ADRES\n" +
                        $"   {address.Substring(0, 10)}...{address.Substring(address.Length - 10)}\n\n";
 
             if (transactions.Any())
             {
-                text += "?? SON 5 ISLEM\n" +
-                        "???????????????????\n\n";
+                text += "🔙 SON 5 ISLEM\n" +
+                        "################\n\n";
 
                 foreach (var tx in transactions.Take(5))
                 {
@@ -265,18 +265,18 @@ public class KasaCommands
             }
             else
             {
-                text += "?? SON 5 ISLEM\n" +
-                        "???????????????????\n\n" +
+                text += "🔙 SON 5 ISLEM\n" +
+                        "################\n\n" +
                         "Henuz islem yok.\n\n";
             }
 
-            text += $"?? Son Guncelleme: {DateTime.Now:HH:mm:ss}";
+            text += $"🔄 Son Guncelleme: {DateTime.Now:HH:mm:ss}";
 
             var keyboard = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("?? Yenile", callbackData) },
-                new[] { InlineKeyboardButton.WithCallbackData("?? Kasa Ozet", "kasa_ozet") },
-                new[] { InlineKeyboardButton.WithCallbackData("?? Ana Menu", "main_menu") }
+                new[] { InlineKeyboardButton.WithCallbackData("🔄 Yenile", callbackData) },
+                new[] { InlineKeyboardButton.WithCallbackData("📊 Kasa Ozet", "kasa_ozet") },
+                new[] { InlineKeyboardButton.WithCallbackData("Ana Menu", "main_menu") }
             });
 
             await botClient.EditMessageTextAsync(
@@ -670,4 +670,5 @@ public class Transaction
     public DateTime Date { get; set; }
     public string Type { get; set; } = ""; // "Yatirim" veya "Cekim"
 }
+
 
